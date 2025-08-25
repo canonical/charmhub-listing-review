@@ -35,7 +35,7 @@ This repository contains:
    in this repository.
 2. The reviewer checks if the prerequisites are met and the pull request is
    ready.
-3. The public review is carried out as a conversation on the pull request.
+3. The public review is carried out as a conversation on the issue.
 4. The review concludes if the charm is 'publication ready', and if so the store
    team is asked to list the charm.
 
