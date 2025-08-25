@@ -10,7 +10,7 @@ privately listed. To change the charm to be publicly listed requires passing a
 lightweight review process to ensure charm consistency and quality. This is a
 one-off process (in most circumstances), not done for each revision of a charm.
 
-Reviewing charms encourages the involvement of the community. The community
+Reviewing charms encourages the involvement of the community. "Community"
 refers to individuals and organisations creating or contributing to charms,
 Juju, and the wider charming ecosystem. The goals of the review are:
 
