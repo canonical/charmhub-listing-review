@@ -64,8 +64,7 @@ If the charm is ready for review,
 ## Next steps
 
 - Read our [Code of conduct](https://ubuntu.com/community/code-of-conduct) and
-  join our [chat](https://matrix.to/#/#charmhub-ops:ubuntu.com) and
-  [forum](https://discourse.charmhub.io/) to get help polishing your charm or
-  with the public listing review process.
+  join our [Matrix chat](https://matrix.to/#/#charmhub-ops:ubuntu.com) to get help polishing your charm or
+  with the public listing review process. We also have a [Discourse forum](https://discourse.charmhub.io/) for longer-form questions, updates, and tips.
 - Read our [CONTRIBUTING guide](https://github.com/canonical/charmhub-listing-review/blob/main/CONTRIBUTING.md)
   and contribute!
