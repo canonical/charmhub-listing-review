@@ -63,7 +63,6 @@ If the charm is ready for review,
 
 ## Next steps
 
-- Read the [docs](https://documentation.ubuntu.com/ops/latest/).
 - Read our [Code of conduct](https://ubuntu.com/community/code-of-conduct) and
   join our [chat](https://matrix.to/#/#charmhub-ops:ubuntu.com) and
   [forum](https://discourse.charmhub.io/) to get help polishing your charm or
