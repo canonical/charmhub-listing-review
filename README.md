@@ -15,7 +15,7 @@ refers to individuals and organisations creating or contributing to charms,
 Juju, and the wider charming ecosystem. The goals of the review are:
 
 1. Be transparent about the capabilities and qualities of a charm.
-2. Ensure a common level of quality.
+2. Ensure a consistent level of quality for users of charms.
 
 A listing review is *not* code review. The reviewer may be looking at some of
 the charm code, and may have comments on it, but the listing review is not a
