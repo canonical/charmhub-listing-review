@@ -46,7 +46,7 @@ If more information will be required to evaluate the requirement, add a new fiel
 
 If the requirement can be automatically evaluated, add an evaluation method to [the evaluation script](./evaluate.py). We do not use AI/LLM tools for evaluation at this time.
 
-If the requirement cannot be automatically evaluated, add it to the [issue script](./update_issue.py) in the issue description template.
+If the requirement cannot be automatically evaluated, add it to the [issue script](./update_issue.py), in the part of the script that defines the issue description template.
 
 # Pull requests
 
