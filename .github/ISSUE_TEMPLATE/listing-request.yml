@@ -8,7 +8,7 @@ body:
     attributes:
       label: Charm name
       description: "What is the name of the charm, as it appears on Charmhub?"
-      placeholder: ex. myworkload-k8s
+      placeholder: myworkload-k8s
     validations:
       required: true
 
