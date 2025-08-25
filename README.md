@@ -56,15 +56,16 @@ to passing a review. Note that some of the criteria can be checked automatically
 by the reviewer (so you will need to evaluate readiness in those areas
 yourself).
 
-## Get started
+## Next steps
 
 If the charm is ready for review,
 [open an issue in this repository](https://github.com/canonical/charmhub-listing-review/issues/new).
 
-## Next steps
+Or:
 
 - Read our [Code of conduct](https://ubuntu.com/community/code-of-conduct) and
-  join our [Matrix chat](https://matrix.to/#/#charmhub-ops:ubuntu.com) to get help polishing your charm or
-  with the public listing review process. We also have a [Discourse forum](https://discourse.charmhub.io/) for longer-form questions, updates, and tips.
-- Read our [CONTRIBUTING guide](https://github.com/canonical/charmhub-listing-review/blob/main/CONTRIBUTING.md)
-  and contribute!
+  join our [Matrix chat](https://matrix.to/#/#charmhub-charmdev:ubuntu.com)  to get
+  help polishing your charm or with the public listing review process. We also have a
+  [Discourse forum](https://discourse.charmhub.io/) for longer-form questions, updates,
+  and tips.
+- Read our [CONTRIBUTING guide](https://github.com/canonical/charmhub-listing-review/blob/main/CONTRIBUTING.md) and contribute!
