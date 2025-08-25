@@ -17,7 +17,7 @@ body:
     attributes:
       label: Demo
       description: "Please provide a link to a demo video, or instructions on how to set up a demo over a call, or instructions on installing and trying out the charm via a tutorial."
-      placeholder: ex. https://www.youtube.com/watch?v=example
+      placeholder: https://www.youtube.com/watch?v=example
     validations:
       required: true
 
