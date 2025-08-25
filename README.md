@@ -33,7 +33,7 @@ This repository contains:
 1. The author requests a review for *one* charm at a time with all prerequisites
    using a [listing request issue](https://github.com/canonical/charmhub-listing-review/issues/new)
    in this repository.
-2. The reviewer checks if the prerequisites are met and the pull request is
+2. The reviewer checks if the prerequisites are met and the issue is
    ready.
 3. The public review is carried out as a conversation on the issue.
 4. The review concludes if the charm is 'publication ready', and if so the store
