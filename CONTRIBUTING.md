@@ -8,7 +8,7 @@ Before working on changes, please consider [opening an issue](https://github.com
 
 If you've identified a charming best practice that is not currently found, or that needs adjusting, in the [Ops](https://ops.readthedocs.io) ([repo](https://github.com/canonical/operator)), [Juju](https://juju.is/docs) ([repo](https://github.com/juju/juju)), or [Charmcraft](https://canonical-charmcraft.readthedocs-hosted.com/latest/) ([repo](https://github.com/canonical/charmcraft)) documentation, please suggest it by opening a documentation pull request in those repositories.
 
-Best practice notes should be added to the doc where charmers are most likely to discover them. For charmcraft, this tends to be the [`charmcraft.yaml` reference](https://canonical-charmcraft.readthedocs-hosted.com/latest/reference/files/charmcraft-yaml-file/), and for Ops, this tends to be the [relevant how-to guide](https://ops.readthedocs.io/en/latest/howto/index.html).
+Best practice notes should be added to the doc where charmers are most likely to discover them. For Charmcraft, this tends to be the [`charmcraft.yaml` reference](https://canonical-charmcraft.readthedocs-hosted.com/latest/reference/files/charmcraft-yaml-file/), and for Ops, this tends to be the [relevant how-to guide](https://ops.readthedocs.io/en/latest/howto/index.html).
 
 In a Markdown (.md) document, the note should be added using a triple-backtick admonition block. For example:
 
