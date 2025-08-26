@@ -46,7 +46,7 @@ def evaluate(
     security_url: str,
 ) -> list[str]:
     """Evaluate the charm for listing on Charmhub.
-    
+
     Returns a list of strings that should be included in a Markdown checklist.
     For example:
 
