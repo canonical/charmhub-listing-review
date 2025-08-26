@@ -178,7 +178,7 @@ def _get_charmcraft_yaml(repo_dir: pathlib.Path) -> dict[Any, Any] | None:
     try:
         with charmcraft_path.open() as f:
             return yaml.safe_load(f)
-    except Exception:
+    except (yaml.YAMLError, OSError):
         return None
 
 
