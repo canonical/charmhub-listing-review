@@ -90,15 +90,16 @@ def contribution_guidelines(contribution_url: str) -> str:
     The documentation for contributing to the charm should be separate from the
     documentation for developing or using the charm.
     """
+    description = '* [ ] The charm provides contribution guidelines.'
     # Ideally, this would also check that the content of the URL is actually a
     # reasonable contribution guide, but that is more difficult to automate.
     try:
         response = requests.head(contribution_url, allow_redirects=True, timeout=5)
         if response.ok:
-            return '* [x] The charm provides contribution guidelines.'
-        return '* [ ] The charm provides contribution guidelines.'
+            return description.replace('* [ ]', '* [x]')
+        return description
     except requests.RequestException:
-        return '* [ ] The charm provides contribution guidelines.'
+        return description
 
 
 _known_licenses = {
@@ -116,17 +117,18 @@ def license_statement(license_url: str) -> str:
     For the charm shared, OSS or not, the licensing terms of the charm are
     clarified (which also implies an identified authorship of the charm).
     """
+    description = '* [ ] The charm provides a license statement.'
     try:
         response = requests.get(license_url, allow_redirects=True, timeout=5)
         if response.ok:
             # Check for known licenses, with a simple hash.
             license_hash = hashlib.sha512(response.text.strip().encode('utf-8')).hexdigest()
             if license_hash in _known_licenses:
-                return '* [x] The charm provides a license statement.'
+                return description.replace('* [ ]', '* [x]')
             # If it's another license, then let the reviewer decide if it's a license file.
-        return '* [ ] The charm provides a license statement.'
+        return description
     except requests.RequestException:
-        return '* [ ] The charm provides a license statement.'
+        return description
 
 
 def security_doc(security_url: str) -> str:
@@ -135,15 +137,16 @@ def security_doc(security_url: str) -> str:
     The charm's security documentation explains which versions are supported,
     and how to report security issues.
     """
+    description = '* [ ] The charm provides a security statement.'
     # Ideally, this would also check some of the content of the security doc,
     # like that it has a section on how to report security issues.
     try:
         response = requests.head(security_url, allow_redirects=True, timeout=5)
         if response.ok:
-            return '* [x] The charm provides a security statement.'
-        return '* [ ] The charm provides a security statement.'
+            return description.replace('* [ ]', '* [x]')
+        return description
     except requests.RequestException:
-        return '* [ ] The charm provides a security statement.'
+        return description
 
 
 def _clone_repo(charm_repo_url: str) -> pathlib.Path:
@@ -183,9 +186,10 @@ def metadata_links(repo_dir: pathlib.Path) -> str:
     values. A links field includes fields for documentation, issues, source,
     website, and contact, which all resolve with a 2xx status code.
     """
+    description = '* [ ] charmcraft.yaml includes required metadata.'
     data = _get_charmcraft_yaml(repo_dir)
     if not data:
-        return '* [ ] charmcraft.yaml includes required metadata.'
+        return description
     default_desc = """A single sentence that says what the charm is, concisely and memorably.
 
 A paragraph of one to three short sentences, that describe what the charm does.
@@ -202,7 +206,7 @@ Finally, a paragraph that describes whom the charm is useful for.\n"""
     for field, default in required_fields.items():
         value = data.get(field, '')
         if not value or value == default:
-            return '* [ ] charmcraft.yaml includes required metadata.'
+            return description
 
     links = data.get('links', {})
     link_fields = ['documentation', 'issues', 'source', 'website', 'contact']
@@ -212,15 +216,15 @@ Finally, a paragraph that describes whom the charm is useful for.\n"""
         if field == 'contact':
             continue
         if not url:
-            return '* [ ] charmcraft.yaml includes required metadata.'
+            return description
         try:
             resp = requests.head(url, allow_redirects=True, timeout=5)
             if not resp.ok:
-                return '* [ ] charmcraft.yaml includes required metadata.'
+                return description
         except requests.RequestException:
-            return '* [ ] charmcraft.yaml includes required metadata.'
+            return description
 
-    return '* [x] charmcraft.yaml includes required metadata.'
+    return description.replace('* [ ]', '* [x]')
 
 
 def _validate_action_or_config_name(name: str) -> bool:
@@ -536,9 +540,10 @@ def charm_has_icon(repo_dir: pathlib.Path) -> str:
      * Do not use glossy materials unless they are parts of a logo that you are not allowed to
        modify.
     """
+    description = '* [ ] The charm has an icon.'
     icon_path = repo_dir / 'icon.svg'
     if not icon_path.is_file():
-        return '* [ ] The charm has an icon.'
+        return description
     tree = ET.parse(icon_path)  # noqa: S314
     root = tree.getroot()
     width = root.attrib.get('width')
@@ -548,15 +553,15 @@ def charm_has_icon(repo_dir: pathlib.Path) -> str:
         width_val = float(width.replace('px', ''))
         height_val = float(height.replace('px', ''))
         if width_val == 100 and height_val == 100:
-            return '* [x] The charm has an icon.'
+            return description.replace('* [ ]', '* [x]')
     elif view_box:
         parts = view_box.strip().split()
         if len(parts) == 4:
             vb_width = float(parts[2])
             vb_height = float(parts[3])
             if vb_width == 100 and vb_height == 100:
-                return '* [x] The charm has an icon.'
-    return '* [ ] The charm has an icon.'
+                return description.replace('* [ ]', '* [x]')
+    return description
 
 
 def charm_lib_docs(repo_dir: pathlib.Path) -> str:
