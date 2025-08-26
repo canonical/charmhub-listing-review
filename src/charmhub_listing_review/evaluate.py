@@ -1,12 +1,3 @@
-#! /usr/bin/env python
-
-# /// script
-# dependencies = [
-#   "requests",
-#   "pyyaml"
-# ]
-# ///
-
 # Copyright 2025 Canonical Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -598,29 +589,3 @@ If the charm provides a general library, the library's module docstring must con
     # fmt: on
 
     return description
-
-
-def main():
-    parser = argparse.ArgumentParser(description='Evaluate a charm for listing on Charmhub.')
-    parser.add_argument('repository_url', help='The URL of the charm repository')
-    parser.add_argument('linting_url', help='The URL of the linting configuration')
-    parser.add_argument('contribution_url', help='The URL of the contribution guidelines')
-    parser.add_argument('license_url', help='The URL of the license statement')
-    parser.add_argument('security_url', help='The URL of the security policy')
-    args = parser.parse_args()
-
-    print(
-        '\n'.join(
-            evaluate(
-                charm_name=args.repository_url.split('/')[-1].replace('.git', ''),
-                repository_url=args.repository_url,
-                linting_url=args.linting_url,
-                contribution_url=args.contribution_url,
-                license_url=args.license_url,
-                security_url=args.security_url,
-            )
-        )
-    )
-
-if __name__ == '__main__':
-    main()
