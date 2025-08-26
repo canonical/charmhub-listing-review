@@ -46,7 +46,19 @@ def evaluate(
     license_url: str,
     security_url: str,
 ) -> list[str]:
-    """Evaluate the charm for listing on Charmhub."""
+    """Evaluate the charm for listing on Charmhub.
+    
+    Returns a list of strings that should be included in a Markdown checklist.
+    For example:
+
+        * [ ] The charm foos correctly.
+        * [x] The charm bars when it should.
+        * [ ] Appropriate baz was found in the charm metadata.
+
+    The items will be ticked when the automation was able to determine that the
+    criteria is already met, and unticked both if it was not met and if the
+    automation was unable to make a determination.
+    """
     results: list[str] = []
     repo_dir = _clone_repo(repository_url)
     try:
