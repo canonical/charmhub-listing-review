@@ -145,6 +145,8 @@ The following checks are not required for listing, but are recommended for all c
     return ''.join(description)
 
 
+# TODO: It would be better to amend the docs so that we don't have these issues
+# than to have a manually curated set of practices to ignore.
 IGNORED_BEST_PRACTICES = {
     # This is covered by the more extensive items above. It's also duplicated in
     # the docs.
@@ -288,43 +290,89 @@ def assign_review(issue_number: int):
     return reviewer
 
 
-def main():
-    """Extract information from the issue and post/update a review comment."""
-    parser = argparse.ArgumentParser(
-        description='Update a GitHub issue for a charm listing review.'
+def update_gh_issue(issue_number: int, summary: str, comment: str):
+    # Update the issue title:
+    subprocess.run(  # noqa: S603
+        ['gh', 'issue', 'edit', str(issue_number), '--title', summary],  # noqa: S607
+        check=True,
     )
-    parser.add_argument(
-        '--issue-number', type=int, help='The issue number to update', required=True
-    )
-    parser.add_argument(
-        '--dry-run', action='store_true', help='Do not update the issue, just print the output'
-    )
-    parser.add_argument(
-        '--path-to-ops',
-        type=pathlib.Path,
-        default=pathlib.Path(__file__).parent.parent / 'operator',
-        help='Path to a clone of canonical/operator',
-    )
-    parser.add_argument(
-        '--path-to-charmcraft',
-        type=pathlib.Path,
-        default=pathlib.Path(__file__).parent.parent / 'charmcraft',
-        help='Path to a clone of canonical/charmcraft',
-    )
-    args = parser.parse_args()
 
-    issue_data = get_details_from_issue(args.issue_number)
-
-    summary = issue_summary(issue_data['name'])
-    comment = issue_comment(
-        issue_data['name'],
-        issue_data['demo_url'],
-        issue_data['ci_release_url'],
-        issue_data['ci_integration_url'],
-        issue_data['documentation_link'],
-        args.path_to_ops,
-        args.path_to_charmcraft,
+    # Assign the issue, if it is not already.
+    gh = subprocess.run(  # noqa: S603
+        ['gh', 'issue', 'view', str(issue_number), '--json', 'assignees'],
+        capture_output=True,
+        text=True,
     )
+    assignees = json.loads(gh.stdout.strip()).get('assignees', [])
+    if assignees:
+        manager = assignees[0]
+    else:
+        # If there are no assignees, then we need to assign the issue.
+        manager = assign_review(issue_number)
+    request_review = re.sub(
+        r'\s',
+        ' ',
+        f"""\
+@{manager} - please assign this review to someone in your team, and mention
+their name in a comment (for example, "Hi @canonical-person, please review this
+charm"). Please choose someone that will have time to complete the initial
+review within the next three working days.
+""",
+    )
+    comment = f'{comment}\n\n{request_review}'
+
+    existing_comments = subprocess.run(  # noqa: S603
+        ['gh', 'issue', 'view', str(issue_number), '--json', 'comments'],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    existing_comments = json.loads(existing_comments.stdout.strip()).get('comments', [])
+    if not existing_comments:
+        # Create a new comment.
+        subprocess.run(  # noqa: S603
+            ['gh', 'issue', 'comment', str(issue_number), '--body', comment],  # noqa: S607
+            check=True,
+        )
+        return
+
+    # Update the status with any checks from the reviewer.
+    reviewer = None
+    for existing_comment in existing_comments:
+        if existing_comment['author']['login'] == manager:
+            reviewer = body.split('@', 1)[1].split(' ')[0]
+            continue
+        if existing_comment['author']['login'] != reviewer:
+            continue
+        for line in existing_comment['body'].splitlines():
+            # We ignore everything that isn't in the checklist format,
+            # so that the reviewer can leave free-form comments.
+            if not line.startswith('* [ ]') and not line.startswith('* [x]'):
+                continue
+            if line.startswith('* [ ]') and line.replace('* [ ]', '* [x]') in comment:
+                # We are unticking this item, unfortunately.
+                comment = comment.replace(line.replace('* [ ]', '* [x]'), line)
+            elif line.startswith('* [x]') and line.replace('* [x]', '* [ ]') in comment:
+                # We are ticking this item, yay!
+                comment = comment.replace(line.replace('* [x]', '* [ ]'), line)
+
+    # Update the first comment with the new content.
+    subprocess.run(  # noqa: S603
+        [  # noqa: S607
+            'gh',
+            'issue',
+            'comment',
+            str(issue_number),
+            '--edit-last',  # comment of the current user
+            existing_comments.splitlines()[0],
+            '--body',
+            comment,
+        ],
+        check=True,
+    )
+
+
+def apply_automated_checks(issue_data: _IssueData, comment: str):
     results = evaluate.evaluate(
         issue_data['name'],
         issue_data['project_repo'],
@@ -342,83 +390,54 @@ def main():
             comment = comment.replace(result, result.replace('* [ ]', '* [x]'))
         elif result.replace('* [x]', '* [ ]') in comment:
             comment = comment.replace(result.replace('* [x]', '* [ ]'), result)
+    return comment
+
+
+def main():
+    """Extract information from the issue and post/update a review comment."""
+    parser = argparse.ArgumentParser(
+        description='Update a GitHub issue for a charm listing review.'
+    )
+    parser.add_argument(
+        '--issue-number', type=int, help='The issue number to update', required=True
+    )
+    parser.add_argument(
+        '--dry-run', action='store_true', help='Do not update the issue, just print the output'
+    )
+    parser.add_argument(
+        '--path-to-ops',
+        type=pathlib.Path,
+        default=pathlib.Path(__file__).parent.parent / 'operator',
+        help='Path to a clone of canonical/operator (to get best practices)',
+    )
+    parser.add_argument(
+        '--path-to-charmcraft',
+        type=pathlib.Path,
+        default=pathlib.Path(__file__).parent.parent / 'charmcraft',
+        help='Path to a clone of canonical/charmcraft (to get best practices)',
+    )
+    args = parser.parse_args()
+
+    issue_data = get_details_from_issue(args.issue_number)
+
+    summary = issue_summary(issue_data['name'])
+    comment = issue_comment(
+        issue_data['name'],
+        issue_data['demo_url'],
+        issue_data['ci_release_url'],
+        issue_data['ci_integration_url'],
+        issue_data['documentation_link'],
+        args.path_to_ops,
+        args.path_to_charmcraft,
+    )
+    comment = apply_automated_checks(issue_data)
 
     if args.dry_run:
         print(summary)
         print()
         print(comment)
     else:
-        # Update the issue title:
-        subprocess.run(  # noqa: S603
-            ['gh', 'issue', 'edit', str(args.issue_number), '--title', summary],  # noqa: S607
-            check=True,
-        )
-        # If there is already a first comment that we posted, then update it with the latest
-        # content. Otherwise, create a new comment.
-        existing_comments = subprocess.run(  # noqa: S603
-            ['gh', 'issue', 'view', str(args.issue_number), '--json', 'comments'],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        existing_comments = json.loads(existing_comments.stdout.strip()).get('comments', [])
-        if existing_comments:
-            # Update the status with any checks from the reviewer.
-            manager = None
-            reviewer = None
-            for existing_comment in existing_comments:
-                body = existing_comment['body']
-                if "please assign this review to someone in your team" in body:
-                    manager = body.rsplit('@', 2)[1].split(' ')[0]
-                    continue
-                if manager is not None and f"@{manager}" in body:
-                    reviewer = body.split('@', 1)[1].split(' ')[0]
-                    continue
-                if existing_comment['author'] == reviewer:
-                    for line in body.splitlines():
-                        # We ignore everything that isn't in the checklist format,
-                        # so that the reviewer can leave free-form comments.
-                        if not line.startswith("* [ ]") and not line.startswith("* [x]"):
-                            continue
-                        if line.startswith('* [ ]') and line.replace('* [ ]', '* [x]') in comment:
-                            # We are unticking this item, unfortunately.
-                            comment = comment.replace(line.replace('* [ ]', '* [x]'), line)
-                        elif line.startswith('* [x]') and line.replace('* [x]', '* [ ]') in comment:
-                            # We are ticking this item, yay!
-                            comment = comment.replace(line.replace('* [x]', '* [ ]'), line)
-            # Update the first comment with the new content.
-            subprocess.run(  # noqa: S603
-                [  # noqa: S607
-                    'gh',
-                    'issue',
-                    'comment',
-                    str(args.issue_number),
-                    '--edit-last',  # comment of the current user
-                    existing_comments.splitlines()[0],
-                    '--body',
-                    comment,
-                ],
-                check=True,
-            )
-        else:
-            # Assign the issue.
-            reviewer = assign_review(args.issue_number)
-            request_review = re.sub(
-                r'\s',
-                ' ',
-                f"""\
-@{reviewer} - please assign this review to someone in your team, and mention
-their name in a comment (for example, "Hi @canonical-person, please review this
-charm"). Please choose someone that will have time to complete the initial
-review within the next three working days.
-""",
-            )
-            comment = f"{comment}\n\n{request_review}"
-            # Create a new comment.
-            subprocess.run(  # noqa: S603
-                ['gh', 'issue', 'comment', str(args.issue_number), '--body', comment],  # noqa: S607
-                check=True,
-            )
+        update_gh_issue(args.issue_number, summary, comment)
 
 
 if __name__ == '__main__':
