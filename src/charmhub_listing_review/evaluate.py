@@ -23,7 +23,6 @@ for the reviewer, and is also a way for charm publishers to check their charm
 against the listing requirements before submitting a listing request.
 """
 
-import argparse
 import hashlib
 import pathlib
 import re
