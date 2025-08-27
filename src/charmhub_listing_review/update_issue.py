@@ -217,16 +217,15 @@ class _IssueData(TypedDict):
 def get_details_from_issue(issue_number: int):
     """Fetch details from the issue number using the GitHub CLI.
 
-    Requires `gh` CLI to be installed and authenticated, and `jq` to be
-    available.
+    Requires `gh` CLI to be installed and authenticated.
     """
     result = subprocess.run(  # noqa: S603
-        ['gh', 'issue', 'view', str(issue_number), '--json', 'body', '--jq', '.body'],  # noqa: S607
+        ['gh', 'issue', 'view', str(issue_number), '--json', 'body'],  # noqa: S607
         capture_output=True,
         text=True,
         check=True,
     )
-    body = result.stdout
+    body = json.loads(result.stdout)['body']
 
     # Define the fields to extract and their headings
     fields = {
