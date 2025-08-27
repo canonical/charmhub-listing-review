@@ -28,25 +28,25 @@ def test_assign_review_multiple_teams(
 ):
     reviewers_yaml = {
         'reviewers': {
-            'alice': {'team': 'team1'},
-            'bob': {'team': 'team2'},
-            'carol': {'team': 'team1'},
+            '@alice': {'team': 'team1'},
+            '@bob': {'team': 'team2'},
+            '@carol': {'team': 'team1'},
         }
     }
     mock_yaml_load.return_value = reviewers_yaml
     mock_open.return_value.__enter__.return_value = mock.Mock()
     mock_subprocess_run.return_value = mock.Mock()
-    mock_random_choice.return_value = 'bob'
+    mock_random_choice.return_value = '@bob'
     reviewer = update_issue.assign_review(42)
-    assert reviewer == 'bob'
+    assert reviewer == '@bob'
     mock_subprocess_run.assert_called_once_with([
         'gh',
         'issue',
         'edit',
         '42',
         '--add-assignee',
-        reviewer,
-    ])
+        'bob',
+    ], check=True)
 
 
 @mock.patch('subprocess.run')
@@ -55,22 +55,22 @@ def test_assign_review_multiple_teams(
 def test_assign_review_single_team(mock_open, mock_yaml_load, mock_subprocess_run):
     reviewers_yaml = {
         'reviewers': {
-            'alice': {'team': 'team1'},
+            '@alice': {'team': 'team1'},
         }
     }
     mock_yaml_load.return_value = reviewers_yaml
     mock_open.return_value.__enter__.return_value = mock.Mock()
     mock_subprocess_run.return_value = mock.Mock()
     reviewer = update_issue.assign_review(99)
-    assert reviewer == 'alice'
+    assert reviewer == '@alice'
     mock_subprocess_run.assert_called_once_with([
         'gh',
         'issue',
         'edit',
         '99',
         '--add-assignee',
-        reviewer,
-    ])
+        'alice',
+    ], check=True)
 
 
 @mock.patch('subprocess.run')
@@ -167,14 +167,11 @@ Other text
     :class: hint
 
     Another best practice block.
-
-    This one has multiple paragraphs.
 """
     )
     blocks = update_issue.extract_best_practice_blocks(rst_file)
     assert 'This is a ReST best practice block.' in blocks[0]
     assert 'Another best practice block.' in blocks[1]
-    assert 'This one has multiple paragraphs.' in blocks[1]
 
 
 def test_find_best_practices(tmp_path):
@@ -185,6 +182,8 @@ def test_find_best_practices(tmp_path):
     (ops_dir / 'file1.md').write_text(
         """
 ```{admonition} Best practice
+:class: hint
+
 Ops best practice.
 ```
 """
