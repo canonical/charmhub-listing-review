@@ -34,6 +34,7 @@ import pathlib
 import random
 import re
 import subprocess  # noqa: S404
+import sys
 from typing import TypedDict, cast
 
 import yaml
@@ -341,9 +342,16 @@ review within the next three working days.
     reviewer = None
     for existing_comment in existing_comments:
         if existing_comment['author']['login'] == manager:
-            reviewer = existing_comment['body'].split('@', 1)[1].split(' ')[0]
-            continue
-        if existing_comment['author']['login'] != reviewer:
+            try:
+                reviewer = existing_comment['body'].split('@', 1)[1].split(' ')[0]
+            except IndexError:
+                print(
+                    f"Could not find reviewer in comment {existing_comment['body']}",
+                    file=sys.stderr
+                )
+            else:
+                continue
+        if reviewer is None or existing_comment['author']['login'] != reviewer:
             continue
         for line in existing_comment['body'].splitlines():
             # We ignore everything that isn't in the checklist format,
