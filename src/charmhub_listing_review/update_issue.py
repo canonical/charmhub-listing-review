@@ -41,7 +41,6 @@ import yaml
 
 from .evaluate import evaluate
 
-
 BEST_PRACTICE_RE_MD = re.compile(
     r'```{admonition} Best practice\s*(?:.*?\n)?([\s\S]*?)```',
     re.MULTILINE,
@@ -219,8 +218,8 @@ def get_details_from_issue(issue_number: int):
 
     Requires `gh` CLI to be installed and authenticated.
     """
-    result = subprocess.run(  # noqa: S603
-        ['gh', 'issue', 'view', str(issue_number), '--json', 'body'],  # noqa: S607
+    result = subprocess.run(
+        ['gh', 'issue', 'view', str(issue_number), '--json', 'body'],
         capture_output=True,
         text=True,
         check=True,
@@ -259,7 +258,7 @@ def get_details_from_issue(issue_number: int):
     return cast('_IssueData', issue_data)
 
 
-def assign_review(issue_number: int, dry_run: bool=False):
+def assign_review(issue_number: int, dry_run: bool = False):
     """Assign the issue to a team.
 
     We assign the issue to a single person (generally the manager) from a
@@ -285,36 +284,33 @@ def assign_review(issue_number: int, dry_run: bool=False):
     reviewer = random.choice(team_reviewers)  # noqa: S311
 
     if not dry_run:
-        subprocess.run(  # noqa: S603
-            ['gh', 'issue', 'edit', str(issue_number), '--add-assignee', reviewer[1:]],  # noqa: S607
+        subprocess.run(
+            ['gh', 'issue', 'edit', str(issue_number), '--add-assignee', reviewer[1:]],
             check=True,
         )
     return reviewer
 
 
 def update_gh_issue(issue_number: int, summary: str, comment: str, dry_run: bool = False):
+    """Update the specified GitHub issue with the latest generated comment."""
     # Update the issue title.
     if dry_run:
         print(summary)
         print()
     else:
-        subprocess.run(  # noqa: S603
-            ['gh', 'issue', 'edit', str(issue_number), '--title', summary],  # noqa: S607
+        subprocess.run(
+            ['gh', 'issue', 'edit', str(issue_number), '--title', summary],
             check=True,
         )
 
     # Assign the issue, if it is not already.
-    gh = subprocess.run(  # noqa: S603
+    gh = subprocess.run(
         ['gh', 'issue', 'view', str(issue_number), '--json', 'assignees'],
         capture_output=True,
         text=True,
     )
     assignees = json.loads(gh.stdout.strip()).get('assignees', [])
-    if assignees:
-        manager = assignees[0]['login']
-    else:
-        # If there are no assignees, then we need to assign the issue.
-        manager = assign_review(issue_number, dry_run)
+    manager = assignees[0]['login'] if assignees else assign_review(issue_number, dry_run)
     request_review = re.sub(
         r'\s',
         ' ',
@@ -327,8 +323,8 @@ review within the next three working days.
     )
     comment = f'{comment}\n\n{request_review}'
 
-    existing_comments = subprocess.run(  # noqa: S603
-        ['gh', 'issue', 'view', str(issue_number), '--json', 'comments'],  # noqa: S607
+    existing_comments = subprocess.run(
+        ['gh', 'issue', 'view', str(issue_number), '--json', 'comments'],
         capture_output=True,
         text=True,
         check=True,
@@ -339,8 +335,8 @@ review within the next three working days.
         if dry_run:
             print(comment)
         else:
-            subprocess.run(  # noqa: S603
-                ['gh', 'issue', 'comment', str(issue_number), '--body', comment],  # noqa: S607
+            subprocess.run(
+                ['gh', 'issue', 'comment', str(issue_number), '--body', comment],
                 check=True,
             )
         return
@@ -376,8 +372,8 @@ review within the next three working days.
     if dry_run:
         print(comment)
     else:
-        subprocess.run(  # noqa: S603
-            [  # noqa: S607
+        subprocess.run(
+            [
                 'gh',
                 'issue',
                 'comment',
@@ -391,6 +387,7 @@ review within the next three working days.
 
 
 def apply_automated_checks(issue_data: _IssueData, comment: str):
+    """Adjust the comment to tick or untick items based on automated checks."""
     results = evaluate(
         issue_data['name'],
         issue_data['project_repo'],
