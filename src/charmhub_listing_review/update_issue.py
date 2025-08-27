@@ -260,7 +260,7 @@ def get_details_from_issue(issue_number: int):
     return cast('_IssueData', issue_data)
 
 
-def assign_review(issue_number: int):
+def assign_review(issue_number: int, dry_run: bool=False):
     """Assign the issue to a team.
 
     We assign the issue to a single person (generally the manager) from a
@@ -285,19 +285,24 @@ def assign_review(issue_number: int):
     team_reviewers = [name for name, info in reviewers.items() if info['team'] == team]
     reviewer = random.choice(team_reviewers)  # noqa: S311
 
-    subprocess.run(  # noqa: S603
-        ['gh', 'issue', 'edit', str(issue_number), '--add-assignee', reviewer[1:]],  # noqa: S607
-        check=True,
-    )
+    if not dry_run:
+        subprocess.run(  # noqa: S603
+            ['gh', 'issue', 'edit', str(issue_number), '--add-assignee', reviewer[1:]],  # noqa: S607
+            check=True,
+        )
     return reviewer
 
 
-def update_gh_issue(issue_number: int, summary: str, comment: str):
-    # Update the issue title:
-    subprocess.run(  # noqa: S603
-        ['gh', 'issue', 'edit', str(issue_number), '--title', summary],  # noqa: S607
-        check=True,
-    )
+def update_gh_issue(issue_number: int, summary: str, comment: str, dry_run: bool = False):
+    # Update the issue title.
+    if dry_run:
+        print(summary)
+        print()
+    else:
+        subprocess.run(  # noqa: S603
+            ['gh', 'issue', 'edit', str(issue_number), '--title', summary],  # noqa: S607
+            check=True,
+        )
 
     # Assign the issue, if it is not already.
     gh = subprocess.run(  # noqa: S603
@@ -310,7 +315,7 @@ def update_gh_issue(issue_number: int, summary: str, comment: str):
         manager = assignees[0]['login']
     else:
         # If there are no assignees, then we need to assign the issue.
-        manager = assign_review(issue_number)
+        manager = assign_review(issue_number, dry_run)
     request_review = re.sub(
         r'\s',
         ' ',
@@ -332,10 +337,13 @@ review within the next three working days.
     existing_comments = json.loads(existing_comments.stdout.strip()).get('comments', [])
     if not existing_comments:
         # Create a new comment.
-        subprocess.run(  # noqa: S603
-            ['gh', 'issue', 'comment', str(issue_number), '--body', comment],  # noqa: S607
-            check=True,
-        )
+        if dry_run:
+            print(comment)
+        else:
+            subprocess.run(  # noqa: S603
+                ['gh', 'issue', 'comment', str(issue_number), '--body', comment],  # noqa: S607
+                check=True,
+            )
         return
 
     # Update the status with any checks from the reviewer.
@@ -366,18 +374,21 @@ review within the next three working days.
                 comment = comment.replace(line.replace('* [x]', '* [ ]'), line)
 
     # Update the first comment with the new content.
-    subprocess.run(  # noqa: S603
-        [  # noqa: S607
-            'gh',
-            'issue',
-            'comment',
-            str(issue_number),
-            '--edit-last',  # comment of the current user
-            '--body',
-            comment,
-        ],
-        check=True,
-    )
+    if dry_run:
+        print(comment)
+    else:
+        subprocess.run(  # noqa: S603
+            [  # noqa: S607
+                'gh',
+                'issue',
+                'comment',
+                str(issue_number),
+                '--edit-last',  # comment of the current user
+                '--body',
+                comment,
+            ],
+            check=True,
+        )
 
 
 def apply_automated_checks(issue_data: _IssueData, comment: str):
@@ -438,14 +449,9 @@ def main():
         args.path_to_ops,
         args.path_to_charmcraft,
     )
-    comment = apply_automated_checks(issue_data)
+    comment = apply_automated_checks(issue_data, comment)
 
-    if args.dry_run:
-        print(summary)
-        print()
-        print(comment)
-    else:
-        update_gh_issue(args.issue_number, summary, comment)
+    update_gh_issue(args.issue_number, summary, comment, dry_run=args.dry_run)
 
 
 if __name__ == '__main__':
