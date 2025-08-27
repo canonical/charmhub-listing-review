@@ -38,7 +38,8 @@ from typing import TypedDict, cast
 
 import yaml
 
-import evaluate
+from .evaluate import evaluate
+
 
 BEST_PRACTICE_RE_MD = re.compile(
     r'```{admonition} Best practice\s*(?:.*?\n)?([\s\S]*?)```',
@@ -284,7 +285,7 @@ def assign_review(issue_number: int):
     reviewer = random.choice(team_reviewers)  # noqa: S311
 
     subprocess.run(  # noqa: S603
-        ['gh', 'issue', 'edit', str(issue_number), '--assignee', reviewer],  # noqa: S607
+        ['gh', 'issue', 'edit', str(issue_number), '--add-assignee', reviewer[1:]],  # noqa: S607
         check=True,
     )
     return reviewer
@@ -305,7 +306,7 @@ def update_gh_issue(issue_number: int, summary: str, comment: str):
     )
     assignees = json.loads(gh.stdout.strip()).get('assignees', [])
     if assignees:
-        manager = assignees[0]
+        manager = assignees[0]['login']
     else:
         # If there are no assignees, then we need to assign the issue.
         manager = assign_review(issue_number)
@@ -340,7 +341,7 @@ review within the next three working days.
     reviewer = None
     for existing_comment in existing_comments:
         if existing_comment['author']['login'] == manager:
-            reviewer = body.split('@', 1)[1].split(' ')[0]
+            reviewer = existing_comment['body'].split('@', 1)[1].split(' ')[0]
             continue
         if existing_comment['author']['login'] != reviewer:
             continue
@@ -364,7 +365,6 @@ review within the next three working days.
             'comment',
             str(issue_number),
             '--edit-last',  # comment of the current user
-            existing_comments.splitlines()[0],
             '--body',
             comment,
         ],
@@ -373,7 +373,7 @@ review within the next three working days.
 
 
 def apply_automated_checks(issue_data: _IssueData, comment: str):
-    results = evaluate.evaluate(
+    results = evaluate(
         issue_data['name'],
         issue_data['project_repo'],
         issue_data['ci_linting'],
