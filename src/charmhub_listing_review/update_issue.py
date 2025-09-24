@@ -88,7 +88,7 @@ When reviewing test coverage of the charm, note that:
 * Some charms may have additional tests in an external location, particularly if the charm has specific resource requirements (such as specific hardware).
 
 <details>
-<summary>Reviewer: copy this list of requirements to a separate comment</summary>
+<summary>Reviewer: copy this list of requirements to a separate comment, so you can check things off</summary>
 
 ```
 ## Listing requirements
