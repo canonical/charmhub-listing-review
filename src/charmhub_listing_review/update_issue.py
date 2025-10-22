@@ -42,8 +42,7 @@ import yaml
 
 from .evaluate import evaluate
 
-# TODO: Change tonyandrewmeyer to canonical when #1989 is merged.
-BEST_PRACTICE_SOURCE = 'https://github.com/tonyandrewmeyer/operator/raw/refs/heads/review-process-and-best-practices/docs/reuse/best-practices.txt'
+BEST_PRACTICE_SOURCE = 'https://github.com/canonical/operator/raw/refs/heads/review-process-and-best-practices/docs/reuse/best-practices.txt'
 
 
 def issue_summary(name: str):
