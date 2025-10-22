@@ -121,7 +121,7 @@ A charm's documentation should focus on the charm itself. For workload-specific 
 The following best practices are recommended for all charms, and are also
 required for listing.
 
-{'\n'.join(('* [ ] ' + p[2:]) for p in best_practices)}
+{'\n'.join(('* [ ] ' + p.removeprefix('- ')) for p in best_practices)}
 """.strip()
         )
 
