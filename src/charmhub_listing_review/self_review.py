@@ -44,11 +44,16 @@ def format_checklist_for_console(checklist_markdown: str) -> str:
         if line.strip().startswith('* [x]'):
             item_text = line.replace('* [x]', '').strip()
             formatted_lines.append(f' ✅ {item_text}')
+        elif line.strip().startswith('* [o]'):
+            item_text = line.replace('* [o]', '').strip()
+            formatted_lines.append(f' ❌ {item_text}')
         elif line.strip().startswith('* [ ]'):
             item_text = line.replace('* [ ]', '').strip()
             formatted_lines.append(f' ❓ {item_text}')
-        elif line.strip().startswith('##'):
-            formatted_lines.append(f'\n\033[1m{line.strip()}\033[0m')  # bold
+        elif line.strip().startswith('###'):
+            header_text = line.strip().replace('###', '').strip()
+            formatted_lines.append(f'\n📋 \033[1m\033[4m{header_text}\033[0m')  # bold, underlined
+            formatted_lines.append('')
         elif line.strip() and not line.startswith('```'):
             formatted_lines.append(f' {line.strip()}')
     return '\n'.join(formatted_lines)
@@ -73,7 +78,7 @@ def print_self_review_results(
     # The initial items need to have the links removed.
     fixed_checks = """
     ### Basic Requirements
-* [ ] The charm does what it is meant to do, demonstrated in demo or by following a tutorial.
+* [ ] The charm does what it is meant to do, demonstrated in a demo or by following a tutorial.
 * [ ] The charm's page on Charmhub provides a quality impression. The overall appearance looks good and the documentation looks reasonable.
 * [ ] The charm has an icon.
 * [ ] Automated releasing to unstable channels exists
@@ -84,6 +89,9 @@ def print_self_review_results(
     comment = (
         fixed_checks + '\n\n' + comment.split('### Documentation', 1)[1].split('</details>', 1)[0]
     )
+
+    # TODO: it would be great if we had a better wrapping story, both for GitHub and console.
+    comment = comment.replace('are also\nrequired for listing.', 'are also required for listing.')
 
     if project_repo:
         # Like update-issue, this assumes it's GitHub for now.
@@ -101,9 +109,21 @@ def print_self_review_results(
                 security_url,
             )
 
+            automated_checks = set()
             for result in results:
-                if result and result.replace('* [x]', '* [ ]') in comment:
-                    comment = comment.replace(result.replace('* [x]', '* [ ]'), result)
+                if not result:
+                    continue
+
+                unchecked_version = result.replace('* [x]', '* [ ]')
+                automated_checks.add(unchecked_version)
+                if unchecked_version in comment:
+                    if result.startswith('* [x]'):
+                        comment = comment.replace(unchecked_version, result)
+                    else:
+                        failed_version = unchecked_version.replace('* [ ]', '* [o]')
+                        comment = comment.replace(unchecked_version, failed_version)
+
+            # For checks that weren't automated, we already leave them as '* [ ]' (unknown)
         except Exception as e:
             print('\n⚠️  Warning: Could not run automated checks on repository.')
             print(
@@ -121,8 +141,13 @@ def print_self_review_results(
     print(formatted_checklist)
 
     completed_count = comment.count('* [x]')
-    total_count = comment.count('* [')
-    print(f'\n\033[1m📊 Progress: {completed_count}/{total_count} checks passed\033[0m')
+    failed_count = comment.count('* [o]')
+    unknown_count = comment.count('* [ ]')
+    total_count = completed_count + failed_count + unknown_count
+
+    print(
+        f'\n\033[1m📊 Progress: {completed_count} passed, {failed_count} failed, {unknown_count} manual review needed\033[0m'
+    )
     print('\n💡 Note: This self-review covers automated checks only.')
     print('   A human reviewer will perform additional checks during the official review process.')
     print('\n📋 To submit your charm for official review, create an issue at:')
