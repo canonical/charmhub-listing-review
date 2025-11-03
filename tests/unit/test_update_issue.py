@@ -125,6 +125,56 @@ https://docs.example.com
     )
 
 
+def test_apply_automated_checks():
+    """Test that apply_automated_checks uses IDs to match checklist items."""
+    from unittest import mock
+
+    import charmhub_listing_review.update_issue as update_issue
+
+    # Create mock issue data
+    issue_data = update_issue._IssueData(
+        name='test-charm',
+        demo_url='https://demo.example.com',
+        project_repo='https://github.com/canonical/test-charm',
+        ci_linting='https://ci.example.com/lint',
+        ci_release_url='https://ci.example.com/release',
+        ci_integration_url='https://ci.example.com/integration',
+        documentation_link='https://docs.example.com',
+        contribution_link='https://github.com/canonical/test-charm/blob/main/CONTRIBUTING.md',
+        license_link='https://github.com/canonical/test-charm/blob/main/LICENSE',
+        security_link='https://github.com/canonical/test-charm/blob/main/SECURITY.md',
+    )
+
+    # Create a comment with a placeholder section
+    comment = """
+### Best practices
+
+The following best practices are recommended for all charms.
+
+```
+</details>
+"""
+
+    # Mock the evaluate function to return CheckResult objects
+    from charmhub_listing_review.evaluate import CheckResult
+
+    mock_results = [
+        CheckResult(
+            id='contribution-guidelines', passed=True, description='The charm provides contribution guidelines.'
+        ),
+        CheckResult(id='license-statement', passed=False, description='The charm provides a license statement.'),
+        CheckResult(id='security-doc', passed=None, description='The charm provides a security statement.'),
+    ]
+
+    with mock.patch('charmhub_listing_review.update_issue.evaluate', return_value=mock_results):
+        result = update_issue.apply_automated_checks(issue_data, comment)
+
+    # Verify that the result contains the checks with IDs
+    assert '<!-- check-id: contribution-guidelines -->* [x] The charm provides contribution guidelines.' in result
+    assert '<!-- check-id: license-statement -->* [ ] The charm provides a license statement.' in result
+    assert '<!-- check-id: security-doc -->* [ ] The charm provides a security statement.' in result
+
+
 def test_issue_summary():
     name = 'my-charm'
     summary = update_issue.issue_summary(name)
