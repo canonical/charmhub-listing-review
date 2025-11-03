@@ -33,14 +33,14 @@ import json
 import pathlib
 import random
 import re
-import subprocess  # noqa: S404
+import subprocess
 import urllib.error
 import urllib.request
 from typing import TypedDict, cast
 
 import yaml
 
-from .evaluate import evaluate
+from .evaluate import CheckResult, evaluate
 
 BEST_PRACTICE_SOURCE = 'https://raw.githubusercontent.com/canonical/operator/refs/heads/main/docs/reuse/best-practices.txt'
 
@@ -294,8 +294,12 @@ review within the next three working days.
         )
 
 
-def apply_automated_checks(issue_data: _IssueData, comment: str):
-    """Adjust the comment to tick items based on automated checks."""
+def apply_automated_checks(issue_data: _IssueData, comment: str) -> str:
+    """Adjust the comment to tick items based on automated checks.
+
+    This function uses HTML comment IDs embedded in the checklist to identify
+    which items can be automatically checked, avoiding brittle string matching.
+    """
     results = evaluate(
         issue_data['name'],
         issue_data['project_repo'],
@@ -304,9 +308,57 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
         issue_data['license_link'],
         issue_data['security_link'],
     )
-    for result in results:
-        if result.replace('* [x]', '* [ ]') in comment:
-            comment = comment.replace(result.replace('* [x]', '* [ ]'), result)
+
+    # Create a mapping of check IDs to their results
+    check_results: dict[str, CheckResult] = {result.id: result for result in results}
+
+    # Build the automated checks section with IDs embedded as HTML comments
+    automated_section_lines: list[str] = []
+    for check_id, result in check_results.items():
+        # Determine checkbox state based on result
+        if result.passed is True:
+            checkbox = '* [x]'
+        elif result.passed is False:
+            checkbox = '* [ ]'
+        else:  # result.passed is None
+            checkbox = '* [ ]'
+
+        # Add the check with an ID embedded as an HTML comment
+        automated_section_lines.append(
+            f'<!-- check-id: {check_id} -->{checkbox} {result.description}'
+        )
+
+    if automated_section_lines:
+        # Insert the automated checks section after "Best practices" heading
+        best_practices_marker = '### Best practices'
+        if best_practices_marker in comment:
+            # Find where to insert (after the best practices intro text)
+            parts = comment.split(best_practices_marker, 1)
+            if len(parts) == 2:
+                # Split the second part to find where the list starts
+                after_header = parts[1]
+                # Find the end of the intro paragraph
+                intro_end = after_header.find('\n\n')
+                if intro_end != -1:
+                    intro = after_header[:intro_end]
+                    rest = after_header[intro_end:]
+                    comment = (
+                        parts[0]
+                        + best_practices_marker
+                        + intro
+                        + '\n\n'
+                        + '\n'.join(automated_section_lines)
+                        + rest
+                    )
+    else:
+        # No automated checks, just add them at the end before closing
+        close_marker = '\n```\n</details>\n'
+        if close_marker in comment:
+            comment = comment.replace(
+                close_marker,
+                '\n\n' + '\n'.join(automated_section_lines) + close_marker,
+            )
+
     return comment
 
 

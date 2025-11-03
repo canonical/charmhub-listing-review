@@ -27,14 +27,30 @@ import hashlib
 import pathlib
 import re
 import shutil
-import subprocess  # noqa: S404
+import subprocess
 import tempfile
 import tomllib
-import xml.etree.ElementTree as ET  # noqa: S405
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from typing import Any
 
 import requests
 import yaml
+
+
+@dataclass
+class CheckResult:
+    """Result of an automated check.
+
+    Attributes:
+        id: Unique identifier for the check
+        passed: Whether the check passed (True), failed (False), or could not be determined (None)
+        description: Human-readable description of what is being checked
+    """
+
+    id: str
+    passed: bool | None
+    description: str
 
 
 def evaluate(
@@ -44,21 +60,18 @@ def evaluate(
     contribution_url: str,
     license_url: str,
     security_url: str,
-) -> list[str]:
+) -> list[CheckResult]:
     """Evaluate the charm for listing on Charmhub.
 
-    Returns a list of strings that should be included in a Markdown checklist.
-    For example:
+    Returns a list of CheckResult objects containing:
+    - id: A unique identifier for the check
+    - passed: Whether the check passed (True), failed (False), or could not be determined (None)
+    - description: A human-readable description of what is being checked
 
-        * [ ] The charm foos correctly.
-        * [x] The charm bars when it should.
-        * [ ] Appropriate baz was found in the charm metadata.
-
-    The items will be ticked when the automation was able to determine that the
-    criteria is already met, and unticked both if it was not met and if the
-    automation was unable to make a determination.
+    The automated checks will determine if criteria are met, not met, or if a determination
+    could not be made.
     """
-    results: list[str] = []
+    results: list[CheckResult] = []
     repo_dir = _clone_repo(repository_url)
     try:
         results.append(coding_conventions(linting_url))
@@ -76,13 +89,15 @@ def evaluate(
         results.append(python_requires_version(repo_dir))
         results.append(repo_has_lock_file(repo_dir))
         results.append(charm_has_icon(repo_dir))
-        results.append(charm_lib_docs(repo_dir))
+        result = charm_lib_docs(repo_dir)
+        if result:
+            results.append(result)
     finally:
         shutil.rmtree(str(repo_dir), ignore_errors=True)
     return results
 
 
-def coding_conventions(linting_url: str) -> str:
+def coding_conventions(linting_url: str) -> CheckResult:
     """Checks for coding conventions are reasonable and implemented in CI.
 
     The source code of the charm is accessible in the sense of approachability.
@@ -92,25 +107,35 @@ def coding_conventions(linting_url: str) -> str:
     # We'll work on automating this in the future. Before we do that, we'll want
     # to figure out how much consistency there is in CI across charms, and if we
     # should encourage more.
-    return '* [ ] The charm implements coding conventions in CI.'
+    return CheckResult(
+        id='coding-conventions',
+        passed=None,
+        description='The charm implements coding conventions in CI.',
+    )
 
 
-def contribution_guidelines(contribution_url: str) -> str:
+def contribution_guidelines(contribution_url: str) -> CheckResult:
     """The documentation for contribution resolves with a 2xx status code.
 
     The documentation for contributing to the charm should be separate from the
     documentation for developing or using the charm.
     """
-    description = '* [ ] The charm provides contribution guidelines.'
+    description = 'The charm provides contribution guidelines.'
     # Ideally, this would also check that the content of the URL is actually a
     # reasonable contribution guide, but that is more difficult to automate.
     try:
         response = requests.head(contribution_url, allow_redirects=True, timeout=5)
-        if response.ok:
-            return description.replace('* [ ]', '* [x]')
-        return description
+        return CheckResult(
+            id='contribution-guidelines',
+            passed=response.ok,
+            description=description,
+        )
     except requests.RequestException:
-        return description
+        return CheckResult(
+            id='contribution-guidelines',
+            passed=None,
+            description=description,
+        )
 
 
 _known_licenses = {
@@ -122,42 +147,60 @@ _known_licenses = {
 }
 
 
-def license_statement(license_url: str) -> str:
+def license_statement(license_url: str) -> CheckResult:
     """The charm's license statement resolves with a 2xx status code.
 
     For the charm shared, OSS or not, the licensing terms of the charm are
     clarified (which also implies an identified authorship of the charm).
     """
-    description = '* [ ] The charm provides a license statement.'
+    description = 'The charm provides a license statement.'
     try:
         response = requests.get(license_url, allow_redirects=True, timeout=5)
         if response.ok:
             # Check for known licenses, with a simple hash.
             license_hash = hashlib.sha512(response.text.strip().encode('utf-8')).hexdigest()
             if license_hash in _known_licenses:
-                return description.replace('* [ ]', '* [x]')
+                return CheckResult(
+                    id='license-statement',
+                    passed=True,
+                    description=description,
+                )
             # If it's another license, then let the reviewer decide if it's a license file.
-        return description
+        return CheckResult(
+            id='license-statement',
+            passed=None,
+            description=description,
+        )
     except requests.RequestException:
-        return description
+        return CheckResult(
+            id='license-statement',
+            passed=None,
+            description=description,
+        )
 
 
-def security_doc(security_url: str) -> str:
+def security_doc(security_url: str) -> CheckResult:
     """The charm's security documentation resolves with a 2xx status code.
 
     The charm's security documentation explains which versions are supported,
     and how to report security issues.
     """
-    description = '* [ ] The charm provides a security statement.'
+    description = 'The charm provides a security statement.'
     # Ideally, this would also check some of the content of the security doc,
     # like that it has a section on how to report security issues.
     try:
         response = requests.head(security_url, allow_redirects=True, timeout=5)
-        if response.ok:
-            return description.replace('* [ ]', '* [x]')
-        return description
+        return CheckResult(
+            id='security-doc',
+            passed=response.ok,
+            description=description,
+        )
     except requests.RequestException:
-        return description
+        return CheckResult(
+            id='security-doc',
+            passed=None,
+            description=description,
+        )
 
 
 def _clone_repo(charm_repo_url: str) -> pathlib.Path:
@@ -187,7 +230,7 @@ def _get_charmcraft_yaml(repo_dir: pathlib.Path) -> dict[Any, Any] | None:
         return None
 
 
-def metadata_links(repo_dir: pathlib.Path) -> str:
+def metadata_links(repo_dir: pathlib.Path) -> CheckResult:
     """charmcraft.yaml includes the name, title, summary, and description.
 
     A complete and consistent appearance of the charm is required.
@@ -197,10 +240,14 @@ def metadata_links(repo_dir: pathlib.Path) -> str:
     values. A links field includes fields for documentation, issues, source,
     website, and contact, which all resolve with a 2xx status code.
     """
-    description = '* [ ] charmcraft.yaml includes required metadata.'
+    description = 'charmcraft.yaml includes required metadata.'
     data = _get_charmcraft_yaml(repo_dir)
     if not data:
-        return description
+        return CheckResult(
+            id='metadata-links',
+            passed=None,
+            description=description,
+        )
     default_desc = """A single sentence that says what the charm is, concisely and memorably.
 
 A paragraph of one to three short sentences, that describe what the charm does.
@@ -217,7 +264,11 @@ Finally, a paragraph that describes whom the charm is useful for.\n"""
     for field, default in required_fields.items():
         value = data.get(field, '')
         if not value or value == default:
-            return description
+            return CheckResult(
+                id='metadata-links',
+                passed=False,
+                description=description,
+            )
 
     links = data.get('links', {})
     link_fields = ['documentation', 'issues', 'source', 'website', 'contact']
@@ -227,15 +278,31 @@ Finally, a paragraph that describes whom the charm is useful for.\n"""
         if field == 'contact':
             continue
         if not url:
-            return description
+            return CheckResult(
+                id='metadata-links',
+                passed=False,
+                description=description,
+            )
         try:
             resp = requests.head(url, allow_redirects=True, timeout=5)
             if not resp.ok:
-                return description
+                return CheckResult(
+                    id='metadata-links',
+                    passed=False,
+                    description=description,
+                )
         except requests.RequestException:
-            return description
+            return CheckResult(
+                id='metadata-links',
+                passed=False,
+                description=description,
+            )
 
-    return description.replace('* [ ]', '* [x]')
+    return CheckResult(
+        id='metadata-links',
+        passed=True,
+        description=description,
+    )
 
 
 def _validate_action_or_config_name(name: str) -> bool:
@@ -249,7 +316,7 @@ def _validate_action_or_config_name(name: str) -> bool:
     return True
 
 
-def check_charm_name(charm_name: str) -> str:
+def check_charm_name(charm_name: str) -> CheckResult:
     """The charm's name is aligns with best practices.
 
     The charm's name is lowercase alphanumeric, with hyphens (-) to separate
@@ -260,7 +327,7 @@ def check_charm_name(charm_name: str) -> str:
         r'\s+',
         ' ',
         """
-    * [ ] The charm name should be slug-oriented (ASCII lowercase letters, numbers, and hyphens)
+    The charm name should be slug-oriented (ASCII lowercase letters, numbers, and hyphens)
     and follow the pattern ``<workload name in full>[<function>][-k8s]``. For example,
     ``argo-server-k8s``. Include the ``-k8s`` suffix on all charms that run on a Kubernetes cloud,
     unless the charm has no workload or you know that there will never be a machine version of the
@@ -270,12 +337,15 @@ def check_charm_name(charm_name: str) -> str:
     See {external+charmcraft:ref}`name <charmcraft-yaml-key-name>`.
     """,
     ).strip()
-    if _validate_action_or_config_name(charm_name):
-        return description.replace('* [ ]', '* [x]')
-    return description
+    passed = _validate_action_or_config_name(charm_name)
+    return CheckResult(
+        id='charm-name',
+        passed=passed,
+        description=description,
+    )
 
 
-def action_names(repo_dir: pathlib.Path) -> str:
+def action_names(repo_dir: pathlib.Path) -> CheckResult:
     """The charm's actions are named according to the best practices.
 
     The charm's actions are named using lowercase alphanumeric names, with
@@ -289,7 +359,7 @@ def action_names(repo_dir: pathlib.Path) -> str:
         r'\s+',
         ' ',
         """
-    * [ ] Prefer lowercase alphanumeric action names, and use hyphens (-) to separate words.
+    Prefer lowercase alphanumeric action names, and use hyphens (-) to separate words.
     For charms that have already standardised on underscores, it is not necessary to change them,
     and it is better to be consistent within a charm then to have some action names be dashed and
     some be underscored. See {external+charmcraft:ref}`actions <charmcraft-yaml-key-actions>`.
@@ -298,15 +368,27 @@ def action_names(repo_dir: pathlib.Path) -> str:
     data = _get_charmcraft_yaml(repo_dir)
     if not data or 'actions' not in data:
         # No actions means that everything is fine in terms of names.
-        return description.replace('* [ ]', '* [x]')
+        return CheckResult(
+            id='action-names',
+            passed=True,
+            description=description,
+        )
     actions = data.get('actions', {})
     for name in actions:
         if not _validate_action_or_config_name(name):
-            return description
-    return description.replace('* [ ]', '* [x]')
+            return CheckResult(
+                id='action-names',
+                passed=False,
+                description=description,
+            )
+    return CheckResult(
+        id='action-names',
+        passed=True,
+        description=description,
+    )
 
 
-def option_names(repo_dir: pathlib.Path) -> str:
+def option_names(repo_dir: pathlib.Path) -> CheckResult:
     """The charm's config options are named according to the best practices.
 
     The charm's config options are named using lowercase alphanumeric names,
@@ -321,7 +403,7 @@ def option_names(repo_dir: pathlib.Path) -> str:
         r'\s+',
         ' ',
         """
-    * [ ] Prefer lowercase alphanumeric option names, separated with dashes if required.
+    Prefer lowercase alphanumeric option names, separated with dashes if required.
     For charms that have already standardised on underscores, it is not necessary to change them,
     and it is better to be consistent within a charm then to have some config names be dashed and
     some be underscored. See {external+charmcraft:ref}`config <charmcraft-yaml-key-config>`.
@@ -330,22 +412,34 @@ def option_names(repo_dir: pathlib.Path) -> str:
     data = _get_charmcraft_yaml(repo_dir)
     if not data or 'config' not in data:
         # No options means that everything is fine in terms of names.
-        return description.replace('* [ ]', '* [x]')
+        return CheckResult(
+            id='option-names',
+            passed=True,
+            description=description,
+        )
     options = data.get('config', {}).get('options', {})
     for name in options:
         if not _validate_action_or_config_name(name):
-            return description
-    return description.replace('* [ ]', '* [x]')
+            return CheckResult(
+                id='option-names',
+                passed=False,
+                description=description,
+            )
+    return CheckResult(
+        id='option-names',
+        passed=True,
+        description=description,
+    )
 
 
-def repository_name(repository_url: str, charm_name: str) -> str:
+def repository_name(repository_url: str, charm_name: str) -> CheckResult:
     """The repository is named according to best practices."""
     # This has to match the description in the Charmcraft documentation.
     description = re.sub(
         r'\s+',
         ' ',
         """
-    * [ ] Name the repository using the pattern ``<charm name>-operator`` for a single charm,
+    Name the repository using the pattern ``<charm name>-operator`` for a single charm,
       or ``<base charm name>-operators`` when the repository will hold multiple related charms.
       For the charm name, see {external+charmcraft:ref}`Charmcraft | Specify a name
       <specify-a-name>`. See [Create a repository and initialise it]
@@ -357,12 +451,15 @@ def repository_name(repository_url: str, charm_name: str) -> str:
         repo_name = repo_name[:-4]
     single_pattern = f'{charm_name}-operator'
     multi_pattern = f'{charm_name}-operators'
-    if repo_name in (single_pattern, multi_pattern):
-        return description.replace('* [ ]', '* [x]')
-    return description
+    passed = repo_name in (single_pattern, multi_pattern)
+    return CheckResult(
+        id='repository-name',
+        passed=passed,
+        description=description,
+    )
 
 
-def relations_includes_optional(repo_dir: pathlib.Path) -> str:
+def relations_includes_optional(repo_dir: pathlib.Path) -> CheckResult:
     """The charm's relations include the optional key.
 
     Always include the ``optional`` key, rather than relying on the default
@@ -378,7 +475,7 @@ def relations_includes_optional(repo_dir: pathlib.Path) -> str:
         r'\s+',
         ' ',
         """
-    * [ ] Include the ``optional`` key in all endpoint definitions, rather than relying on the
+    Include the ``optional`` key in all endpoint definitions, rather than relying on the
     default value to indicate that the relation is required. Although this field is not enforced
     by Juju, including it makes it clear to users (and other tools) whether the relation is
     required. See {external+charmcraft:ref}`<endpoint role> <charmcraft-yaml-key-requires>`.
@@ -386,16 +483,28 @@ def relations_includes_optional(repo_dir: pathlib.Path) -> str:
     ).strip()
     data = _get_charmcraft_yaml(repo_dir)
     if not data:
-        return description
+        return CheckResult(
+            id='relations-optional',
+            passed=None,
+            description=description,
+        )
     for section in ('requires', 'provides'):
         endpoints = data.get(section, {})
         for config in endpoints.values():
             if not isinstance(config, dict) or 'optional' not in config:
-                return description
-    return description.replace('* [ ]', '* [x]')
+                return CheckResult(
+                    id='relations-optional',
+                    passed=False,
+                    description=description,
+                )
+    return CheckResult(
+        id='relations-optional',
+        passed=True,
+        description=description,
+    )
 
 
-def charmcraft_tooling(repo_dir: pathlib.Path) -> str:
+def charmcraft_tooling(repo_dir: pathlib.Path) -> CheckResult:
     """The charm includes the expected tooling for linting and testing.
 
     The repository contains a Makefile, Justfile, or tox.ini that provides
@@ -407,7 +516,7 @@ def charmcraft_tooling(repo_dir: pathlib.Path) -> str:
         r'\s+',
         ' ',
         """
-    * [ ] All charms should provide the commands configured by the Charmcraft profile, to allow
+    All charms should provide the commands configured by the Charmcraft profile, to allow
     easy testing across the charm ecosystem. It's fine to tweak the configuration of individual
     tools, or to add additional commands, but keep the command names and meanings that the profile
     provides. See [Develop your charm](#develop-your-charm).
@@ -418,7 +527,11 @@ def charmcraft_tooling(repo_dir: pathlib.Path) -> str:
         if (repo_dir / filename).is_file():
             break
     else:
-        return description
+        return CheckResult(
+            id='charmcraft-tooling',
+            passed=None,
+            description=description,
+        )
 
     # Check for commands in the files
     commands = {'format', 'lint', 'unit', 'integration'}
@@ -445,14 +558,26 @@ def charmcraft_tooling(repo_dir: pathlib.Path) -> str:
         try:
             subprocess.check_output(command)
         except subprocess.CalledProcessError:
-            return description
+            return CheckResult(
+                id='charmcraft-tooling',
+                passed=False,
+                description=description,
+            )
 
     if all(command in found_commands for command in commands):
-        return description.replace('* [ ]', '* [x]')
-    return description
+        return CheckResult(
+            id='charmcraft-tooling',
+            passed=True,
+            description=description,
+        )
+    return CheckResult(
+        id='charmcraft-tooling',
+        passed=None,
+        description=description,
+    )
 
 
-def charm_plugin_strict_dependencies(repo_dir: pathlib.Path) -> str:
+def charm_plugin_strict_dependencies(repo_dir: pathlib.Path) -> CheckResult:
     """The charm plugin is configured with strict dependencies.
 
     When using the `charm` plugin with charmcraft, ensure that you set strict
@@ -471,14 +596,18 @@ def charm_plugin_strict_dependencies(repo_dir: pathlib.Path) -> str:
         r'\s+',
         ' ',
         """
-    * [ ] When using the `charm` plugin with charmcraft, ensure that you set strict dependencies to
+    When using the `charm` plugin with charmcraft, ensure that you set strict dependencies to
     true. For example:
     """,
     ).strip()
-    return description
+    return CheckResult(
+        id='charm-plugin-strict-dependencies',
+        passed=None,
+        description=description,
+    )
 
 
-def python_requires_version(repo_dir: pathlib.Path) -> str:
+def python_requires_version(repo_dir: pathlib.Path) -> CheckResult:
     """The charm's `pyproject.toml` specifies the required Python version.
 
     This ensures that tooling will detect any use of Python features not
@@ -488,7 +617,7 @@ def python_requires_version(repo_dir: pathlib.Path) -> str:
     `requires-python` field with a version specifier.
     """
     # This has to match the description in the Charmcraft documentation.
-    requires_python = (
+    requires_python_link = (
         '[`requires-python`](https://packaging.python.org/en/latest/'
         'specifications/pyproject-toml/#requires-python)'
     )
@@ -496,18 +625,26 @@ def python_requires_version(repo_dir: pathlib.Path) -> str:
         r'\s+',
         ' ',
         f"""
-    * [ ] Set the {requires_python} version in your `pyproject.toml` so that tooling will detect
+    Set the {requires_python_link} version in your `pyproject.toml` so that tooling will detect
     any use of Python features not available in the versions you support.
     """,
     ).strip()
     pyproject_path = repo_dir / 'pyproject.toml'
     if not pyproject_path.is_file():
-        return description
+        return CheckResult(
+            id='python-requires-version',
+            passed=None,
+            description=description,
+        )
     try:
         with pyproject_path.open('rb') as f:
             data = tomllib.load(f)
     except Exception:
-        return description
+        return CheckResult(
+            id='python-requires-version',
+            passed=None,
+            description=description,
+        )
     requires_python = None
     if 'project' in data and 'requires-python' in data['project']:
         requires_python = data['project']['requires-python']
@@ -515,11 +652,19 @@ def python_requires_version(repo_dir: pathlib.Path) -> str:
         deps = data['tool']['poetry'].get('dependencies', {})
         requires_python = deps.get('python')
     if requires_python:
-        return description.replace('* [ ]', '* [x]')
-    return description
+        return CheckResult(
+            id='python-requires-version',
+            passed=True,
+            description=description,
+        )
+    return CheckResult(
+        id='python-requires-version',
+        passed=None,
+        description=description,
+    )
 
 
-def repo_has_lock_file(repo_dir: pathlib.Path) -> str:
+def repo_has_lock_file(repo_dir: pathlib.Path) -> CheckResult:
     """Both the pyproject.toml and lock file should be present in the repository.
 
     This allows reproducible builds and ensures that the charm's dependencies
@@ -530,19 +675,31 @@ def repo_has_lock_file(repo_dir: pathlib.Path) -> str:
         r'\s+',
         ' ',
         """
-    * [ ] Ensure that the `pyproject.toml` *and* the lock file are committed to version control, so
+    Ensure that the `pyproject.toml` *and* the lock file are committed to version control, so
     that exact versions of charms can be reproduced.
     """,
     ).strip()
     lock_files = ['poetry.lock', 'uv.lock']
     if not repo_dir / 'pyproject.toml':
-        return description
+        return CheckResult(
+            id='repo-has-lock-file',
+            passed=None,
+            description=description,
+        )
     if any((repo_dir / lock_file).is_file() for lock_file in lock_files):
-        return description.replace('* [ ]', '* [x]')
-    return description
+        return CheckResult(
+            id='repo-has-lock-file',
+            passed=True,
+            description=description,
+        )
+    return CheckResult(
+        id='repo-has-lock-file',
+        passed=None,
+        description=description,
+    )
 
 
-def charm_has_icon(repo_dir: pathlib.Path) -> str:
+def charm_has_icon(repo_dir: pathlib.Path) -> CheckResult:
     """The charm has an icon.
 
     Requirements:
@@ -561,10 +718,14 @@ def charm_has_icon(repo_dir: pathlib.Path) -> str:
      * Do not use glossy materials unless they are parts of a logo that you are not allowed to
        modify.
     """
-    description = '* [ ] The charm has an icon.'
+    description = 'The charm has an icon.'
     icon_path = repo_dir / 'icon.svg'
     if not icon_path.is_file():
-        return description
+        return CheckResult(
+            id='charm-has-icon',
+            passed=False,
+            description=description,
+        )
     tree = ET.parse(icon_path)  # noqa: S314
     root = tree.getroot()
     width = root.attrib.get('width')
@@ -574,35 +735,47 @@ def charm_has_icon(repo_dir: pathlib.Path) -> str:
         width_val = float(width.replace('px', ''))
         height_val = float(height.replace('px', ''))
         if width_val == 100 and height_val == 100:
-            return description.replace('* [ ]', '* [x]')
+            return CheckResult(
+                id='charm-has-icon',
+                passed=True,
+                description=description,
+            )
     elif view_box:
         parts = view_box.strip().split()
         if len(parts) == 4:
             vb_width = float(parts[2])
             vb_height = float(parts[3])
             if vb_width == 100 and vb_height == 100:
-                return description.replace('* [ ]', '* [x]')
-    return description
+                return CheckResult(
+                    id='charm-has-icon',
+                    passed=True,
+                    description=description,
+                )
+    return CheckResult(
+        id='charm-has-icon',
+        passed=False,
+        description=description,
+    )
 
 
-def charm_lib_docs(repo_dir: pathlib.Path) -> str:
+def charm_lib_docs(repo_dir: pathlib.Path) -> CheckResult | None:
     """If the charm contains Charmhub libraries, they are appropriately documented."""
     # We don't actually automate checking this, we just provide (or not) the
     # checks the reviewer is expected to do.
     charmcraft_path = repo_dir / 'charmcraft.yaml'
     if not charmcraft_path.exists():
-        return ''
+        return None
     try:
         with charmcraft_path.open() as f:
             data = yaml.safe_load(f)
             charm_name = data.get('name', '')
             if not charm_name:
-                return ''
+                return None
     except (yaml.YAMLError, OSError, KeyError):
-        return ''
+        return None
     if not (repo_dir / 'lib' / 'charms' / charm_name).glob('*/*.py'):
         # The charm does not provide a Charmhub library, so skip including any items.
-        return ''
+        return None
     # fmt: off
     description = (
         re.sub(
@@ -610,16 +783,20 @@ def charm_lib_docs(repo_dir: pathlib.Path) -> str:
             ' ',
             """
 If the charm provides an interface library, the library's module docstring must contain the following information:
-* [ ] the interface(s) this library is for, and if it takes care of one or both of the providing/requiring sides
-* [ ] guidance on how to start when using the library to implement their end of the interface
+the interface(s) this library is for, and if it takes care of one or both of the providing/requiring sides
+guidance on how to start when using the library to implement their end of the interface
 
 If the charm provides a general library, the library's module docstring must contain the following information:
-* [ ] the purpose of the library
-* [ ] the intended audience for the library: is this library intended for use only by the charm or the charming team, or is it a public library intended for anyone to use in their charm?
-* [ ] guidance on how to start using the library
+the purpose of the library
+the intended audience for the library: is this library intended for use only by the charm or the charming team, or is it a public library intended for anyone to use in their charm?
+guidance on how to start using the library
 """.strip(),  # noqa: E501
         )
     )
     # fmt: on
 
-    return description
+    return CheckResult(
+        id='charm-lib-docs',
+        passed=None,
+        description=description,
+    )

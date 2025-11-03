@@ -103,7 +103,10 @@ https://ci.example.com/integration
 ### Documentation Link
 https://docs.example.com
 """
-    mock_subprocess_run.return_value = mock.Mock(stdout=issue_body)
+    # Mock the subprocess.run to return proper JSON
+    mock_subprocess_run.return_value = mock.Mock(
+        stdout='{"body": "' + issue_body.replace('\n', '\\n') + '"}'
+    )
     details = update_issue.get_details_from_issue(123)
     assert details['name'] == 'my-charm'
     assert details['demo_url'] == 'https://demo.example.com'
