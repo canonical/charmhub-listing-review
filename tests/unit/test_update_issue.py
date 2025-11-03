@@ -17,6 +17,7 @@
 from unittest import mock
 
 import charmhub_listing_review.update_issue as update_issue
+from charmhub_listing_review.evaluate import CheckResult
 
 
 @mock.patch('random.choice')
@@ -127,10 +128,6 @@ https://docs.example.com
 
 def test_apply_automated_checks():
     """Test that apply_automated_checks uses IDs to match checklist items."""
-    from unittest import mock
-
-    import charmhub_listing_review.update_issue as update_issue
-
     # Create mock issue data
     issue_data = update_issue._IssueData(
         name='test-charm',
@@ -156,8 +153,6 @@ The following best practices are recommended for all charms.
 """
 
     # Mock the evaluate function to return CheckResult objects
-    from charmhub_listing_review.evaluate import CheckResult
-
     mock_results = [
         CheckResult(
             id='contribution-guidelines',

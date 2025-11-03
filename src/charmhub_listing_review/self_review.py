@@ -30,6 +30,7 @@ console in a user-friendly format instead of updating a GitHub issue.
 """
 
 import argparse
+import re
 import sys
 
 from .evaluate import evaluate
@@ -127,12 +128,10 @@ def print_self_review_results(
 
                 # Try to find and replace a placeholder in the comment
                 # Look for any existing line with this check ID
-                import re as regex
-
                 # Pattern matches: HTML comment ID + checkbox + description + newline
-                pattern = rf'<!-- check-id: {regex.escape(result.id)} -->\*\s*\[[x o ]\].*?\n'
-                if regex.search(pattern, comment):
-                    comment = regex.sub(pattern, result_line + '\n', comment)
+                pattern = rf'<!-- check-id: {re.escape(result.id)} -->\*\s*\[[x o ]\].*?\n'
+                if re.search(pattern, comment):
+                    comment = re.sub(pattern, result_line + '\n', comment)
 
             # For checks that weren't automated, we already leave them as '* [ ]' (unknown)
         except Exception as e:
