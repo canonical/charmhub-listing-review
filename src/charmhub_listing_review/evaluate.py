@@ -23,6 +23,7 @@ for the reviewer, and is also a way for charm publishers to check their charm
 against the listing requirements before submitting a listing request.
 """
 
+import dataclasses
 import hashlib
 import pathlib
 import re
@@ -31,14 +32,13 @@ import subprocess
 import tempfile
 import tomllib
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
 from typing import Any
 
 import requests
 import yaml
 
 
-@dataclass
+@dataclasses.dataclass
 class CheckResult:
     """Result of an automated check.
 

@@ -142,11 +142,15 @@ def test_apply_automated_checks():
         security_link='https://github.com/canonical/test-charm/blob/main/SECURITY.md',
     )
 
-    # Create a comment with a placeholder section
+    # Create a comment with checklist items that can be auto-checked.
     comment = """
 ### Best practices
 
 The following best practices are recommended for all charms.
+
+* [ ] The charm provides contribution guidelines.
+* [ ] The charm provides a license statement.
+* [ ] The charm provides a security statement.
 
 ```
 </details>
@@ -174,7 +178,7 @@ The following best practices are recommended for all charms.
     with mock.patch('charmhub_listing_review.update_issue.evaluate', return_value=mock_results):
         result = update_issue.apply_automated_checks(issue_data, comment)
 
-    # Verify that the result contains the checks with IDs
+    # Verify that the result contains the checks with IDs and updated checkbox states.
     assert (
         '<!-- check-id: contribution-guidelines -->* [x] '
         'The charm provides contribution guidelines.' in result
