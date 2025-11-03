@@ -129,7 +129,8 @@ def print_self_review_results(
                 # Look for any existing line with this check ID
                 import re as regex
 
-                pattern = rf'<!-- check-id: {regex.escape(result.id)} -->.*?\n'
+                # Pattern matches: HTML comment ID + checkbox + description + newline
+                pattern = rf'<!-- check-id: {regex.escape(result.id)} -->\*\s*\[[x o ]\].*?\n'
                 if regex.search(pattern, comment):
                     comment = regex.sub(pattern, result_line + '\n', comment)
 

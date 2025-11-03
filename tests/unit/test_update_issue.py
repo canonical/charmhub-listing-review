@@ -160,19 +160,38 @@ The following best practices are recommended for all charms.
 
     mock_results = [
         CheckResult(
-            id='contribution-guidelines', passed=True, description='The charm provides contribution guidelines.'
+            id='contribution-guidelines',
+            passed=True,
+            description='The charm provides contribution guidelines.',
         ),
-        CheckResult(id='license-statement', passed=False, description='The charm provides a license statement.'),
-        CheckResult(id='security-doc', passed=None, description='The charm provides a security statement.'),
+        CheckResult(
+            id='license-statement',
+            passed=False,
+            description='The charm provides a license statement.',
+        ),
+        CheckResult(
+            id='security-doc',
+            passed=None,
+            description='The charm provides a security statement.',
+        ),
     ]
 
     with mock.patch('charmhub_listing_review.update_issue.evaluate', return_value=mock_results):
         result = update_issue.apply_automated_checks(issue_data, comment)
 
     # Verify that the result contains the checks with IDs
-    assert '<!-- check-id: contribution-guidelines -->* [x] The charm provides contribution guidelines.' in result
-    assert '<!-- check-id: license-statement -->* [ ] The charm provides a license statement.' in result
-    assert '<!-- check-id: security-doc -->* [ ] The charm provides a security statement.' in result
+    assert (
+        '<!-- check-id: contribution-guidelines -->* [x] '
+        'The charm provides contribution guidelines.' in result
+    )
+    assert (
+        '<!-- check-id: license-statement -->* [ ] '
+        'The charm provides a license statement.' in result
+    )
+    assert (
+        '<!-- check-id: security-doc -->* [ ] '
+        'The charm provides a security statement.' in result
+    )
 
 
 def test_issue_summary():
