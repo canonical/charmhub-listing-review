@@ -294,8 +294,12 @@ review within the next three working days.
         )
 
 
-def apply_automated_checks(issue_data: _IssueData, comment: str):
-    """Adjust the comment to tick items based on automated checks."""
+def apply_automated_checks(issue_data: _IssueData, comment: str) -> str:
+    """Adjust the comment to tick items based on automated checks.
+
+    This function uses HTML comment IDs embedded in the checklist to identify
+    which items can be automatically checked, avoiding brittle string matching.
+    """
     results = evaluate(
         issue_data['name'],
         issue_data['project_repo'],
@@ -304,9 +308,34 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
         issue_data['license_link'],
         issue_data['security_link'],
     )
+
+    # Update existing checklist items by adding IDs and updating checkbox state.
     for result in results:
-        if result.replace('* [x]', '* [ ]') in comment:
-            comment = comment.replace(result.replace('* [x]', '* [ ]'), result)
+        # Determine checkbox state based on result.
+        if result.passed is True:
+            checkbox = '* [x]'
+        elif result.passed is False:
+            checkbox = '* [ ]'
+        else:  # result.passed is None
+            checkbox = '* [ ]'
+
+        # Create the line with ID embedded as an HTML comment.
+        result_line = f'<!-- check-id: {result.id} -->{checkbox} {result.description}'
+
+        # Try to find and replace the matching checklist item.
+        # Match pattern: "* [ ] " followed by the description.
+        pattern = rf'\* \[ \] {re.escape(result.description)}'
+        if re.search(pattern, comment):
+            # Replace the item with the version that has ID and updated checkbox.
+            comment = re.sub(pattern, result_line, comment, count=1)
+        else:
+            # Check if it already has an ID (from a previous run).
+            id_pattern = rf'<!-- check-id: {re.escape(result.id)} -->\*\s*\[[x ]\]'
+            if re.search(id_pattern, comment):
+                # Update the existing item with the new checkbox state.
+                replacement = f'<!-- check-id: {result.id} -->{checkbox}'
+                comment = re.sub(id_pattern, replacement, comment, count=1)
+
     return comment
 
 
