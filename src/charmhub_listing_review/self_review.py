@@ -30,6 +30,7 @@ console in a user-friendly format instead of updating a GitHub issue.
 """
 
 import argparse
+import re
 import sys
 
 from .evaluate import evaluate
@@ -109,19 +110,28 @@ def print_self_review_results(
                 security_url,
             )
 
-            automated_checks = set()
+            # Process results and update the comment based on check results
             for result in results:
-                if not result:
-                    continue
+                # Create a markdown line with embedded ID
+                check_id_comment = f'<!-- check-id: {result.id} -->'
 
-                unchecked_version = result.replace('* [x]', '* [ ]')
-                automated_checks.add(unchecked_version)
-                if unchecked_version in comment:
-                    if result.startswith('* [x]'):
-                        comment = comment.replace(unchecked_version, result)
-                    else:
-                        failed_version = unchecked_version.replace('* [ ]', '* [o]')
-                        comment = comment.replace(unchecked_version, failed_version)
+                # Determine checkbox state
+                if result.passed is True:
+                    checkbox = '* [x]'
+                elif result.passed is False:
+                    checkbox = '* [o]'  # Use 'o' for failed checks in self-review
+                else:  # result.passed is None
+                    checkbox = '* [ ]'
+
+                # Create the full line with ID
+                result_line = f'{check_id_comment}{checkbox} {result.description}'
+
+                # Try to find and replace a placeholder in the comment
+                # Look for any existing line with this check ID
+                # Pattern matches: HTML comment ID + checkbox + description + newline
+                pattern = rf'<!-- check-id: {re.escape(result.id)} -->\*\s*\[[x o ]\].*?\n'
+                if re.search(pattern, comment):
+                    comment = re.sub(pattern, result_line + '\n', comment)
 
             # For checks that weren't automated, we already leave them as '* [ ]' (unknown)
         except Exception as e:
