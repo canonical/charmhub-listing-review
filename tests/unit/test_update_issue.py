@@ -14,6 +14,7 @@
 
 """Test the issue comment generation."""
 
+import json
 from unittest import mock
 
 import charmhub_listing_review.update_issue as update_issue
@@ -103,7 +104,7 @@ https://ci.example.com/integration
 ### Documentation Link
 https://docs.example.com
 """
-    mock_subprocess_run.return_value = mock.Mock(stdout=issue_body)
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
     details = update_issue.get_details_from_issue(123)
     assert details['name'] == 'my-charm'
     assert details['demo_url'] == 'https://demo.example.com'
