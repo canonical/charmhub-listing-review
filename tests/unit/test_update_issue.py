@@ -14,6 +14,8 @@
 
 """Test the issue comment generation."""
 
+import json
+import pathlib
 from unittest import mock
 
 import charmhub_listing_review.update_issue as update_issue
@@ -37,7 +39,7 @@ def test_assign_review_multiple_teams(
     mock_open.return_value.__enter__.return_value = mock.Mock()
     mock_subprocess_run.return_value = mock.Mock()
     mock_random_choice.return_value = '@bob'
-    reviewer = update_issue.assign_review(42)
+    reviewer = update_issue.assign_review(42, pathlib.Path('reviewers.yaml'))
     assert reviewer == '@bob'
     mock_subprocess_run.assert_called_once_with(
         [
@@ -64,7 +66,7 @@ def test_assign_review_single_team(mock_open, mock_yaml_load, mock_subprocess_ru
     mock_yaml_load.return_value = reviewers_yaml
     mock_open.return_value.__enter__.return_value = mock.Mock()
     mock_subprocess_run.return_value = mock.Mock()
-    reviewer = update_issue.assign_review(99)
+    reviewer = update_issue.assign_review(99, pathlib.Path('reviewers.yaml'))
     assert reviewer == '@alice'
     mock_subprocess_run.assert_called_once_with(
         [
@@ -103,7 +105,7 @@ https://ci.example.com/integration
 ### Documentation Link
 https://docs.example.com
 """
-    mock_subprocess_run.return_value = mock.Mock(stdout=issue_body)
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
     details = update_issue.get_details_from_issue(123)
     assert details['name'] == 'my-charm'
     assert details['demo_url'] == 'https://demo.example.com'
