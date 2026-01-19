@@ -15,12 +15,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout this repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@85856786d1ce8acfbcc2f13a5f3fbd6b938f9f41  # v7.1.2
+        uses: astral-sh/setup-uv@681c641aba71e4a1c380be3ab5e12ad51f415867  # v7.1.6
 
       - name: Install runners
         run: |
@@ -34,8 +34,6 @@ jobs:
         env:
             GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-            # TODO: This is not the best way to run the script, we should clean this up, but just
-            # getting it working for now.
             uv venv
             uv pip install .
-            uv run update-issue --issue-number "${{ github.event.issue.number }}"
+            uv run update-issue --issue-number "${{ github.event.issue.number }}" --reviewers-file "${{ github.workspace }}/reviewers.yaml"
