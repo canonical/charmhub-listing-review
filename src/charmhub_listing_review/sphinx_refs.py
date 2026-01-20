@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Convert Sphinx inter-documentation references to Markdown links.
+"""Convert Sphinx references to Markdown links.
 
 This module provides functionality to convert Sphinx references, local and inter-,
 (like ``{external+charmcraft:ref}`text <target>```) to proper Markdown links
