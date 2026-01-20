@@ -41,6 +41,8 @@ _CHARMCRAFT_REFS = {
     'charmcraft-yaml-key-requires': ('reference/files/charmcraft-yaml-file/', None),
     'charmcraft-yaml-key-provides': ('reference/files/charmcraft-yaml-file/', None),
     'charmcraft-yaml-key-documentation': ('reference/files/charmcraft-yaml-file/', None),
+    'howto-migrate-to-uv': ('howto/migrate-plugins/charm-to-uv', None),
+    'howto-migrate-to-poetry': ('howto/migrate-plugins/charm-to-poetry/', None),
 }
 
 _JUJU_REFS = {
