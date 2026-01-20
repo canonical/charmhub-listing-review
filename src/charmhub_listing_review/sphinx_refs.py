@@ -14,7 +14,7 @@
 
 """Convert Sphinx inter-documentation references to Markdown links.
 
-This module provides functionality to convert Sphinx inter-docutils references
+This module provides functionality to convert Sphinx references, local and inter-,
 (like ``{external+charmcraft:ref}`text <target>```) to proper Markdown links
 that work in GitHub issues and other Markdown contexts.
 """
