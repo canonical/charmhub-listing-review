@@ -41,6 +41,7 @@ from typing import TypedDict, cast
 import yaml
 
 from .evaluate import evaluate
+from .sphinx_refs import convert_sphinx_refs
 
 BEST_PRACTICE_SOURCE = 'https://raw.githubusercontent.com/canonical/operator/refs/heads/main/docs/reuse/best-practices.txt'
 
@@ -107,9 +108,12 @@ A charm's documentation should focus on the charm itself. For workload-specific 
     # fmt: on
     try:
         with urllib.request.urlopen(BEST_PRACTICE_SOURCE) as response:  # noqa: S310
-            best_practices = response.read().decode().splitlines()
+            best_practices_content = response.read().decode()
     except (urllib.error.URLError, urllib.error.HTTPError):
         best_practices = []
+    else:
+        best_practices_content = convert_sphinx_refs(best_practices_content)
+        best_practices = best_practices_content.splitlines()
     # Remove the headings and empty lines.
     best_practices = [line for line in best_practices if line.startswith('-')]
     if best_practices:
@@ -311,6 +315,8 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
         issue_data['security_link'],
     )
     for result in results:
+        # Convert Sphinx refs in the result to match the converted comment.
+        result = convert_sphinx_refs(result)
         if result.replace('* [x]', '* [ ]') in comment:
             comment = comment.replace(result.replace('* [x]', '* [ ]'), result)
     return comment
