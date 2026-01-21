@@ -27,6 +27,12 @@ _CHARMCRAFT_MIGRATE = f'{_CHARMCRAFT}howto/migrate-plugins/'
 _JUJU = 'https://documentation.ubuntu.com/juju/3.6/'
 _JUJU_CLI = f'{_JUJU}reference/juju-cli/list-of-juju-cli-commands/'
 
+_OPS = 'https://documentation.ubuntu.com/ops/latest/'
+_OPS_CHARM_CODE = f'{_OPS}howto/write-and-structure-charm-code/'
+_OPS_MANAGE_CHARMS = f'{_OPS}howto/manage-charms/'
+_OPS_MANAGE_CONFIG = f'{_OPS}howto/manage-configuration/'
+_OPS_MANAGE_LIBS = f'{_OPS}howto/manage-libraries/'
+
 # Direct mapping from Sphinx reference strings to Markdown link strings.
 # Format: 'sphinx-ref-string' -> 'markdown-link-string'
 # fmt: off
@@ -68,6 +74,25 @@ _SPHINX_TO_MARKDOWN: dict[str, str] = {
     # juju
     '{external+juju:ref}`juju model-config <command-juju-model-config>`':
         f'[juju model-config]({_JUJU_CLI}model-config/#command-juju-model-config)',
+    # ops: local references (from best-practices.txt in operator repo)
+    '[Add Python dependencies to pyproject.toml and update the lock file](#define-the-required-dependencies)':  # noqa: E501
+        f'[Add Python dependencies to pyproject.toml and update the lock file]'
+        f'({_OPS_CHARM_CODE}#define-the-required-dependencies)',
+    '[Use the Python provided by the base](#define-the-required-dependencies)':
+        f'[Use the Python provided by the base]'
+        f'({_OPS_CHARM_CODE}#define-the-required-dependencies)',
+    '[Create a repository and initialise it](#create-a-repository-and-initialise-it)':
+        f'[Create a repository and initialise it]'
+        f'({_OPS_CHARM_CODE}#create-a-repository-and-initialise-it)',
+    '[Validate your charm with every change](#validate-your-charm-with-every-change)':
+        f'[Validate your charm with every change]'
+        f'({_OPS_CHARM_CODE}#validate-your-charm-with-every-change)',
+    '[Develop your charm](#develop-your-charm)':
+        f'[Develop your charm]({_OPS_MANAGE_CHARMS}#develop-your-charm)',
+    '[Define a configuration option](#define-a-configuration-option)':
+        f'[Define a configuration option]({_OPS_MANAGE_CONFIG}#define-a-configuration-option)',
+    '[Write a library](#manage-libraries-write-a-library)':
+        f'[Write a library]({_OPS_MANAGE_LIBS}#manage-libraries-write-a-library)',
 }
 # fmt: on
 
