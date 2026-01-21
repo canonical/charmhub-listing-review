@@ -14,92 +14,68 @@
 
 """Convert Sphinx references to Markdown links.
 
-This module provides functionality to convert Sphinx references, local and inter-,
-(like ``{external+charmcraft:ref}`text <target>```) to proper Markdown links
-that work in GitHub issues and other Markdown contexts.
+This module provides functionality to convert Sphinx references
+to proper Markdown links that work in GitHub issues and other Markdown contexts.
 """
 
-import re
+_CHARMCRAFT = 'https://documentation.ubuntu.com/charmcraft/en/latest/'
+_CHARMCRAFT_YAML = f'{_CHARMCRAFT}reference/files/charmcraft-yaml-file/'
+_CHARMCRAFT_MANAGE = f'{_CHARMCRAFT}howto/manage-charms/'
+_CHARMCRAFT_RESOURCES = f'{_CHARMCRAFT}howto/manage-resources/'
+_CHARMCRAFT_MIGRATE = f'{_CHARMCRAFT}howto/migrate-plugins/'
 
-# Base URLs for different documentation sources
-_BASE_URLS = {
-    'charmcraft': 'https://documentation.ubuntu.com/charmcraft/en/latest/',
-    'juju': 'https://documentation.ubuntu.com/juju/3.6/',
-    'ops': 'https://documentation.ubuntu.com/ops/latest/',
+_JUJU = 'https://documentation.ubuntu.com/juju/3.6/'
+_JUJU_CLI = f'{_JUJU}reference/juju-cli/list-of-juju-cli-commands/'
+
+# Direct mapping from Sphinx reference strings to Markdown link strings.
+# Format: 'sphinx-ref-string' -> 'markdown-link-string'
+# fmt: off
+_SPHINX_TO_MARKDOWN: dict[str, str] = {
+    # charmcraft: manage-charms
+    '{external+charmcraft:ref}`initialise-a-charm`':
+        f'[initialise-a-charm]({_CHARMCRAFT_MANAGE}#initialise-a-charm)',
+    '{external+charmcraft:ref}`Initialise a charm <initialise-a-charm>`':
+        f'[Initialise a charm]({_CHARMCRAFT_MANAGE}#initialise-a-charm)',
+    '{external+charmcraft:ref}`specify-a-name`':
+        f'[specify-a-name]({_CHARMCRAFT_MANAGE}#specify-a-name)',
+    '{external+charmcraft:ref}`Charmcraft | Specify a name <specify-a-name>`':
+        f'[Charmcraft | Specify a name]({_CHARMCRAFT_MANAGE}#specify-a-name)',
+    # charmcraft: manage-resources
+    '{external+charmcraft:ref}`publish-a-resource`':
+        f'[publish-a-resource]({_CHARMCRAFT_RESOURCES}#publish-a-resource)',
+    '{external+charmcraft:ref}`Publish a resource on Charmhub <publish-a-resource>`':
+        f'[Publish a resource on Charmhub]({_CHARMCRAFT_RESOURCES}#publish-a-resource)',
+    # charmcraft: charmcraft.yaml keys
+    '{external+charmcraft:ref}`name <charmcraft-yaml-key-name>`':
+        f'[name]({_CHARMCRAFT_YAML}#charmcraft-yaml-key-name)',
+    '{external+charmcraft:ref}`actions <charmcraft-yaml-key-actions>`':
+        f'[actions]({_CHARMCRAFT_YAML}#charmcraft-yaml-key-actions)',
+    '{external+charmcraft:ref}`config <charmcraft-yaml-key-config>`':
+        f'[config]({_CHARMCRAFT_YAML}#charmcraft-yaml-key-config)',
+    '{external+charmcraft:ref}`links <charmcraft-yaml-key-documentation>`':
+        f'[links]({_CHARMCRAFT_YAML}#charmcraft-yaml-key-documentation)',
+    '{external+charmcraft:ref}`<endpoint role> <charmcraft-yaml-key-requires>`':
+        f'[<endpoint role>]({_CHARMCRAFT_YAML}#charmcraft-yaml-key-requires)',
+    # charmcraft: migration guides
+    '{external+charmcraft:ref}`howto-migrate-to-uv`':
+        f'[howto-migrate-to-uv]({_CHARMCRAFT_MIGRATE}charm-to-uv/#howto-migrate-to-uv)',
+    '{external+charmcraft:ref}`migrate to the uv plugin <howto-migrate-to-uv>`':
+        f'[migrate to the uv plugin]({_CHARMCRAFT_MIGRATE}charm-to-uv/#howto-migrate-to-uv)',
+    '{external+charmcraft:ref}`howto-migrate-to-poetry`':
+        f'[howto-migrate-to-poetry]({_CHARMCRAFT_MIGRATE}charm-to-poetry/#howto-migrate-to-poetry)',
+    '{external+charmcraft:ref}`poetry plugin <howto-migrate-to-poetry>`':
+        f'[poetry plugin]({_CHARMCRAFT_MIGRATE}charm-to-poetry/#howto-migrate-to-poetry)',
+    # juju
+    '{external+juju:ref}`juju model-config <command-juju-model-config>`':
+        f'[juju model-config]({_JUJU_CLI}model-config/#command-juju-model-config)',
 }
-
-# Mapping of Sphinx reference targets to their relative URLs and fragments.
-# The format is: target -> (relative_path, fragment)
-# If fragment is None, the fragment is the same as the target.
-_CHARMCRAFT_REFS = {
-    'initialise-a-charm': ('howto/manage-charms/', None),
-    'specify-a-name': ('howto/manage-charms/', None),
-    'publish-a-resource': ('howto/manage-resources/', None),
-    'charmcraft-yaml-key-name': ('reference/files/charmcraft-yaml-file/', None),
-    'charmcraft-yaml-key-actions': ('reference/files/charmcraft-yaml-file/', None),
-    'charmcraft-yaml-key-config': ('reference/files/charmcraft-yaml-file/', None),
-    'charmcraft-yaml-key-requires': ('reference/files/charmcraft-yaml-file/', None),
-    'charmcraft-yaml-key-provides': ('reference/files/charmcraft-yaml-file/', None),
-    'charmcraft-yaml-key-documentation': ('reference/files/charmcraft-yaml-file/', None),
-    'howto-migrate-to-uv': ('howto/migrate-plugins/charm-to-uv', None),
-    'howto-migrate-to-poetry': ('howto/migrate-plugins/charm-to-poetry/', None),
-}
-
-_JUJU_REFS = {
-    'command-juju-model-config': (
-        'reference/juju-cli/list-of-juju-cli-commands/model-config/',
-        None,
-    ),
-}
-
-_REF_MAPPINGS = {
-    'charmcraft': _CHARMCRAFT_REFS,
-    'juju': _JUJU_REFS,
-}
-
-
-def _get_url(source: str, target: str) -> str | None:
-    """Get the full URL for a Sphinx reference target.
-
-    Args:
-        source: The documentation source (e.g., 'charmcraft', 'juju').
-        target: The reference target (e.g., 'initialise-a-charm').
-
-    Returns:
-        The full URL, or None if the target is not found.
-    """
-    if source not in _BASE_URLS or source not in _REF_MAPPINGS:
-        return None
-    refs = _REF_MAPPINGS[source]
-    if target not in refs:
-        return None
-    base_url = _BASE_URLS[source]
-    path, fragment = refs[target]
-    if fragment is None:
-        fragment = target
-    return f'{base_url}{path}#{fragment}'
-
-
-# Pattern to match Sphinx inter-docutils references:
-# {external+source:ref}`text <target>` or {external+source:ref}`target`
-_SPHINX_REF_PATTERN = re.compile(
-    r'\{external\+([a-z-]+):ref\}`'  # {external+source:ref}`
-    r'([^`]+)'  # content inside backticks
-    r'`'
-)
+# fmt: on
 
 
 def convert_sphinx_refs(text: str) -> str:
-    """Convert Sphinx inter-docutils references to Markdown links.
+    """Convert Sphinx references to Markdown links.
 
-    Converts references like:
-    - ``{external+charmcraft:ref}`Initialise a charm <initialise-a-charm>```
-      -> ``[Initialise a charm](https://...)``
-    - ``{external+charmcraft:ref}`initialise-a-charm```
-      -> ``[initialise-a-charm](https://...)``
-
-    If a reference cannot be resolved, it is converted to plain text
-    (just the display text without the Sphinx markup).
+    Uses a direct string replacement approach with a hardcoded mapping.
 
     Args:
         text: The text containing Sphinx references.
@@ -107,27 +83,6 @@ def convert_sphinx_refs(text: str) -> str:
     Returns:
         The text with Sphinx references converted to Markdown links.
     """
-    # Pattern to extract target from content like "display text <target>"
-    target_pattern = re.compile(r'^(.*?)\s*<([a-z0-9-]+)>$')
-
-    def replace_ref(match: re.Match[str]) -> str:
-        source = match.group(1)
-        content = match.group(2).strip()
-
-        # Check if content has format "display text <target>"
-        target_match = target_pattern.match(content)
-        if target_match:
-            display_text = target_match.group(1).strip()
-            target = target_match.group(2)
-        else:
-            # Content is just the target
-            target = content
-            display_text = content
-
-        url = _get_url(source, target)
-        if url:
-            return f'[{display_text}]({url})'
-        # If we can't resolve, just return the display text
-        return display_text
-
-    return _SPHINX_REF_PATTERN.sub(replace_ref, text)
+    for sphinx_ref, markdown_link in _SPHINX_TO_MARKDOWN.items():
+        text = text.replace(sphinx_ref, markdown_link)
+    return text

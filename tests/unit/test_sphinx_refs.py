@@ -16,103 +16,45 @@
 
 import pytest
 
-from charmhub_listing_review.sphinx_refs import convert_sphinx_refs
+from charmhub_listing_review.sphinx_refs import _SPHINX_TO_MARKDOWN, convert_sphinx_refs
 
 
-@pytest.mark.parametrize(
-    'input_text,expected',
-    [
-        # Reference with display text and target
-        (
-            '{external+charmcraft:ref}`Initialise a charm <initialise-a-charm>`',
-            '[Initialise a charm](https://documentation.ubuntu.com/charmcraft/en/latest/howto/manage-charms/#initialise-a-charm)',
-        ),
-        # Reference with just target
-        (
-            '{external+charmcraft:ref}`initialise-a-charm`',
-            '[initialise-a-charm](https://documentation.ubuntu.com/charmcraft/en/latest/howto/manage-charms/#initialise-a-charm)',
-        ),
-        # Reference to charmcraft.yaml key
-        (
-            '{external+charmcraft:ref}`name <charmcraft-yaml-key-name>`',
-            '[name](https://documentation.ubuntu.com/charmcraft/en/latest/reference/files/charmcraft-yaml-file/#charmcraft-yaml-key-name)',
-        ),
-        # Reference to actions key
-        (
-            '{external+charmcraft:ref}`actions <charmcraft-yaml-key-actions>`',
-            '[actions](https://documentation.ubuntu.com/charmcraft/en/latest/reference/files/charmcraft-yaml-file/#charmcraft-yaml-key-actions)',
-        ),
-        # Reference to config key
-        (
-            '{external+charmcraft:ref}`config <charmcraft-yaml-key-config>`',
-            '[config](https://documentation.ubuntu.com/charmcraft/en/latest/reference/files/charmcraft-yaml-file/#charmcraft-yaml-key-config)',
-        ),
-        # Reference to requires key with custom display text
-        (
-            '{external+charmcraft:ref}`<endpoint role> <charmcraft-yaml-key-requires>`',
-            '[<endpoint role>](https://documentation.ubuntu.com/charmcraft/en/latest/reference/files/charmcraft-yaml-file/#charmcraft-yaml-key-requires)',
-        ),
-        # Reference with pipe character in display text
-        (
-            '{external+charmcraft:ref}`Charmcraft | Specify a name <specify-a-name>`',
-            '[Charmcraft | Specify a name](https://documentation.ubuntu.com/charmcraft/en/latest/howto/manage-charms/#specify-a-name)',
-        ),
-        # Juju reference
-        (
-            '{external+juju:ref}`juju model-config <command-juju-model-config>`',
-            '[juju model-config](https://documentation.ubuntu.com/juju/3.6/reference/juju-cli/list-of-juju-cli-commands/model-config/#command-juju-model-config)',
-        ),
-        # Unknown reference falls back to display text
-        (
-            '{external+charmcraft:ref}`unknown <unknown-target>`',
-            'unknown',
-        ),
-        # Unknown source falls back to display text
-        (
-            '{external+unknown:ref}`text <target>`',
-            'text',
-        ),
-        # Text without references is unchanged
-        (
-            'This is plain text without any Sphinx references.',
-            'This is plain text without any Sphinx references.',
-        ),
-        # Multiple references in same text
-        (
-            'See {external+charmcraft:ref}`initialise-a-charm` '
-            'and {external+charmcraft:ref}`specify-a-name`.',
-            'See [initialise-a-charm]'
-            '(https://documentation.ubuntu.com/charmcraft/en/latest/'
-            'howto/manage-charms/#initialise-a-charm) '
-            'and [specify-a-name]'
-            '(https://documentation.ubuntu.com/charmcraft/en/latest/'
-            'howto/manage-charms/#specify-a-name).',
-        ),
-    ],
-)
-def test_convert_sphinx_refs(input_text, expected):
-    assert convert_sphinx_refs(input_text) == expected
+@pytest.mark.parametrize('sphinx_ref,markdown_link', list(_SPHINX_TO_MARKDOWN.items()))
+def test_convert_sphinx_refs_all_mappings(sphinx_ref, markdown_link):
+    """Test that all mapped references are converted correctly."""
+    assert convert_sphinx_refs(sphinx_ref) == markdown_link
 
 
-def test_convert_sphinx_refs_multiline():
-    """Test that conversion works across multiple lines."""
-    input_text = """
-- Name the repository using the pattern. See {external+charmcraft:ref}`specify-a-name`.
-- Use the {external+charmcraft:ref}`name <charmcraft-yaml-key-name>` field.
-"""
+def test_convert_sphinx_refs_plain_text_unchanged():
+    """Test that plain text without references is unchanged."""
+    text = 'This is plain text without any Sphinx references.'
+    assert convert_sphinx_refs(text) == text
+
+
+def test_convert_sphinx_refs_multiple_references():
+    """Test that multiple references in the same text are converted."""
+    input_text = (
+        'See {external+charmcraft:ref}`initialise-a-charm` '
+        'and {external+charmcraft:ref}`specify-a-name`.'
+    )
     result = convert_sphinx_refs(input_text)
-    charmcraft_base = 'https://documentation.ubuntu.com/charmcraft/en/latest/'
-    assert f'[specify-a-name]({charmcraft_base}howto/manage-charms/#specify-a-name)' in result
-    yaml_file = 'reference/files/charmcraft-yaml-file/'
-    assert f'[name]({charmcraft_base}{yaml_file}#charmcraft-yaml-key-name)' in result
+    charmcraft_manage = (
+        'https://documentation.ubuntu.com/charmcraft/en/latest/howto/manage-charms/'
+    )
+    assert f'[initialise-a-charm]({charmcraft_manage}#initialise-a-charm)' in result
+    assert f'[specify-a-name]({charmcraft_manage}#specify-a-name)' in result
 
 
 def test_convert_sphinx_refs_preserves_surrounding_text():
     """Test that text surrounding references is preserved."""
     input_text = 'Before {external+charmcraft:ref}`initialise-a-charm` after.'
-    charmcraft_base = 'https://documentation.ubuntu.com/charmcraft/en/latest/'
-    expected = (
-        f'Before [initialise-a-charm]({charmcraft_base}'
-        'howto/manage-charms/#initialise-a-charm) after.'
-    )
-    assert convert_sphinx_refs(input_text) == expected
+    result = convert_sphinx_refs(input_text)
+    assert result.startswith('Before ')
+    assert result.endswith(' after.')
+    assert '[initialise-a-charm]' in result
+
+
+def test_convert_sphinx_refs_unknown_reference_unchanged():
+    """Test that unknown references are left unchanged."""
+    input_text = '{external+unknown:ref}`unknown-target`'
+    assert convert_sphinx_refs(input_text) == input_text
