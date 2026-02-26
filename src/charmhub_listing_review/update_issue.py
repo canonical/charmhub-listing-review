@@ -223,9 +223,16 @@ def assign_review(issue_number: int, reviewers_file: pathlib.Path, dry_run: bool
             subprocess.run(
                 ['gh', 'issue', 'edit', str(issue_number), '--add-assignee', reviewer[1:]],
                 check=True,
+                capture_output=True,
+                text=True,
             )
-        except subprocess.CalledProcessError:
-            print(f'Warning: failed to assign {reviewer} to issue {issue_number}.')
+        except subprocess.CalledProcessError as e:
+            print(
+                f'Warning: failed to assign {reviewer} to issue {issue_number}'
+                f' (exit code {e.returncode}).'
+                f'\nstdout: {e.stdout}'
+                f'\nstderr: {e.stderr}'
+            )
     return reviewer
 
 

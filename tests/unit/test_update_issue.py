@@ -52,6 +52,8 @@ def test_assign_review_multiple_teams(
             'bob',
         ],
         check=True,
+        capture_output=True,
+        text=True,
     )
 
 
@@ -79,6 +81,8 @@ def test_assign_review_single_team(mock_open, mock_yaml_load, mock_subprocess_ru
             'alice',
         ],
         check=True,
+        capture_output=True,
+        text=True,
     )
 
 
@@ -87,7 +91,7 @@ def test_assign_review_single_team(mock_open, mock_yaml_load, mock_subprocess_ru
 @mock.patch('yaml.safe_load')
 @mock.patch('pathlib.Path.open')
 def test_assign_review_assignment_failure_is_handled(
-    mock_open, mock_yaml_load, mock_subprocess_run, mock_random_choice
+    mock_open, mock_yaml_load, mock_subprocess_run, mock_random_choice, capsys
 ):
     reviewers_yaml = {
         'reviewers': {
@@ -96,10 +100,16 @@ def test_assign_review_assignment_failure_is_handled(
     }
     mock_yaml_load.return_value = reviewers_yaml
     mock_open.return_value.__enter__.return_value = mock.Mock()
-    mock_subprocess_run.side_effect = subprocess.CalledProcessError(1, 'gh')
+    mock_subprocess_run.side_effect = subprocess.CalledProcessError(
+        1, 'gh', output='some output', stderr="'alice' not found"
+    )
     mock_random_choice.return_value = '@alice'
     reviewer = update_issue.assign_review(42, pathlib.Path('reviewers.yaml'))
     assert reviewer == '@alice'
+    captured = capsys.readouterr()
+    assert 'exit code 1' in captured.out
+    assert 'some output' in captured.out
+    assert "'alice' not found" in captured.out
 
 
 @mock.patch('subprocess.run')
