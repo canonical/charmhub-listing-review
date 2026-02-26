@@ -219,10 +219,13 @@ def assign_review(issue_number: int, reviewers_file: pathlib.Path, dry_run: bool
     reviewer = random.choice(team_reviewers)  # noqa: S311
 
     if not dry_run:
-        subprocess.run(
-            ['gh', 'issue', 'edit', str(issue_number), '--add-assignee', reviewer],
-            check=True,
-        )
+        try:
+            subprocess.run(
+                ['gh', 'issue', 'edit', str(issue_number), '--add-assignee', reviewer[1:]],
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            print(f'Warning: failed to assign {reviewer} to issue {issue_number}.')
     return reviewer
 
 

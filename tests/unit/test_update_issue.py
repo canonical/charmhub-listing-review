@@ -16,6 +16,7 @@
 
 import json
 import pathlib
+import subprocess  # noqa: S404
 from unittest import mock
 
 import charmhub_listing_review.update_issue as update_issue
@@ -48,7 +49,7 @@ def test_assign_review_multiple_teams(
             'edit',
             '42',
             '--add-assignee',
-            '@bob',
+            'bob',
         ],
         check=True,
     )
@@ -75,10 +76,30 @@ def test_assign_review_single_team(mock_open, mock_yaml_load, mock_subprocess_ru
             'edit',
             '99',
             '--add-assignee',
-            '@alice',
+            'alice',
         ],
         check=True,
     )
+
+
+@mock.patch('random.choice')
+@mock.patch('subprocess.run')
+@mock.patch('yaml.safe_load')
+@mock.patch('pathlib.Path.open')
+def test_assign_review_assignment_failure_is_handled(
+    mock_open, mock_yaml_load, mock_subprocess_run, mock_random_choice
+):
+    reviewers_yaml = {
+        'reviewers': {
+            '@alice': {'team': 'team1'},
+        }
+    }
+    mock_yaml_load.return_value = reviewers_yaml
+    mock_open.return_value.__enter__.return_value = mock.Mock()
+    mock_subprocess_run.side_effect = subprocess.CalledProcessError(1, 'gh')
+    mock_random_choice.return_value = '@alice'
+    reviewer = update_issue.assign_review(42, pathlib.Path('reviewers.yaml'))
+    assert reviewer == '@alice'
 
 
 @mock.patch('subprocess.run')
