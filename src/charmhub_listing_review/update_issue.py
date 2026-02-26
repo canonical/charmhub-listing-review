@@ -230,8 +230,8 @@ def assign_review(issue_number: int, reviewers_file: pathlib.Path, dry_run: bool
             print(
                 f'Warning: failed to assign {reviewer} to issue {issue_number}'
                 f' (exit code {e.returncode}).'
-                f'\nstdout: {e.stdout}'
-                f'\nstderr: {e.stderr}'
+                f'\nstdout: {e.stdout!r}'
+                f'\nstderr: {e.stderr!r}'
             )
     return reviewer
 
