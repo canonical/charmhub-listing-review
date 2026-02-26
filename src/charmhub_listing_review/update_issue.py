@@ -220,7 +220,7 @@ def assign_review(issue_number: int, reviewers_file: pathlib.Path, dry_run: bool
 
     if not dry_run:
         subprocess.run(
-            ['gh', 'issue', 'edit', str(issue_number), '--add-assignee', reviewer[1:]],
+            ['gh', 'issue', 'edit', str(issue_number), '--add-assignee', reviewer],
             check=True,
         )
     return reviewer

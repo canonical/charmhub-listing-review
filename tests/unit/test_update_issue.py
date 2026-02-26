@@ -48,7 +48,7 @@ def test_assign_review_multiple_teams(
             'edit',
             '42',
             '--add-assignee',
-            'bob',
+            '@bob',
         ],
         check=True,
     )
@@ -75,7 +75,7 @@ def test_assign_review_single_team(mock_open, mock_yaml_load, mock_subprocess_ru
             'edit',
             '99',
             '--add-assignee',
-            'alice',
+            '@alice',
         ],
         check=True,
     )
