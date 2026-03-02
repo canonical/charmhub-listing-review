@@ -84,9 +84,7 @@ def test_assign_review_single_team(mock_open, mock_yaml_load, mock_subprocess_ru
 @mock.patch('subprocess.run')
 def test_assign_to_overrides_automatic_assignment(mock_subprocess_run):
     empty_comments = json.dumps({'comments': []})
-    mock_subprocess_run.return_value = mock.Mock(
-        returncode=0, stdout=empty_comments
-    )
+    mock_subprocess_run.return_value = mock.Mock(returncode=0, stdout=empty_comments)
     update_issue.update_gh_issue(
         issue_number=42,
         summary='Review `my-charm` for public listing on Charmhub',
@@ -104,9 +102,7 @@ def test_assign_to_overrides_automatic_assignment(mock_subprocess_run):
 @mock.patch('subprocess.run')
 def test_assign_to_strips_at_prefix(mock_subprocess_run):
     empty_comments = json.dumps({'comments': []})
-    mock_subprocess_run.return_value = mock.Mock(
-        returncode=0, stdout=empty_comments
-    )
+    mock_subprocess_run.return_value = mock.Mock(returncode=0, stdout=empty_comments)
     update_issue.update_gh_issue(
         issue_number=42,
         summary='Review `my-charm` for public listing on Charmhub',
@@ -123,9 +119,7 @@ def test_assign_to_strips_at_prefix(mock_subprocess_run):
 @mock.patch('subprocess.run')
 def test_assign_to_dry_run_does_not_call_gh(mock_subprocess_run):
     empty_comments = json.dumps({'comments': []})
-    mock_subprocess_run.return_value = mock.Mock(
-        returncode=0, stdout=empty_comments
-    )
+    mock_subprocess_run.return_value = mock.Mock(returncode=0, stdout=empty_comments)
     update_issue.update_gh_issue(
         issue_number=42,
         summary='Review `my-charm` for public listing on Charmhub',
