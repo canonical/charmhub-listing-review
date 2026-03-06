@@ -347,18 +347,19 @@ def main():
     parser.add_argument(
         '--issue-number', type=int, help='The issue number to update', required=True
     )
-    parser.add_argument(
+    reviewer_group = parser.add_mutually_exclusive_group(required=True)
+    reviewer_group.add_argument(
         '--reviewers-file',
         type=pathlib.Path,
-        help='Path to the reviewers YAML file (required unless --assign-to is used)',
+        help='Path to the reviewers YAML file',
     )
-    parser.add_argument(
-        '--dry-run', action='store_true', help='Do not update the issue, just print the output'
-    )
-    parser.add_argument(
+    reviewer_group.add_argument(
         '--assign-to',
         type=str,
         help='Override automatic reviewer assignment with this GitHub username',
+    )
+    parser.add_argument(
+        '--dry-run', action='store_true', help='Do not update the issue, just print the output'
     )
     parser.add_argument(
         '--repo',
@@ -366,9 +367,6 @@ def main():
         help='GitHub repository in OWNER/REPO format (e.g. canonical/charmhub-listing-review)',
     )
     args = parser.parse_args()
-
-    if not args.assign_to and not args.reviewers_file:
-        parser.error('--reviewers-file is required unless --assign-to is specified')
 
     issue_data = get_details_from_issue(args.issue_number, repo=args.repo)
 
