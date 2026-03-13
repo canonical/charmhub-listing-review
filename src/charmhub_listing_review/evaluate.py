@@ -168,11 +168,12 @@ def get_default_branch(repository_url: str) -> str:
             capture_output=True,
             text=True,
             check=True,
+            timeout=5,
         )
         for line in result.stdout.splitlines():
             if line.startswith('ref: refs/heads/'):
                 return line.split('refs/heads/')[1].split()[0]
-    except (subprocess.CalledProcessError, IndexError, ValueError):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, IndexError, ValueError):
         pass
     return 'main'
 
