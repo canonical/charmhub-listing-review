@@ -40,7 +40,7 @@ from typing import TypedDict, cast
 
 import yaml
 
-from .evaluate import evaluate
+from .evaluate import evaluate, get_default_branch
 from .sphinx_refs import convert_sphinx_refs
 
 BEST_PRACTICE_SOURCE = 'https://raw.githubusercontent.com/canonical/operator/refs/heads/main/docs/reuse/best-practices.txt'
@@ -187,9 +187,10 @@ def get_details_from_issue(issue_number: int):
     # These have expected filenames, so we use those rather than require the author provide them.
     # This is quite specific to GitHub, but we can add support for other platforms if required,
     # and if they aren't found then the reviewer just has to locate them themselves.
-    issue_data['contribution_link'] = f'{issue_data["project_repo"]}/blob/main/CONTRIBUTING.md'
-    issue_data['license_link'] = f'{issue_data["project_repo"]}/blob/main/LICENSE'
-    issue_data['security_link'] = f'{issue_data["project_repo"]}/blob/main/SECURITY.md'
+    default_branch = get_default_branch(issue_data['project_repo'])
+    issue_data['contribution_link'] = f'{issue_data["project_repo"]}/blob/{default_branch}/CONTRIBUTING.md'
+    issue_data['license_link'] = f'{issue_data["project_repo"]}/blob/{default_branch}/LICENSE'
+    issue_data['security_link'] = f'{issue_data["project_repo"]}/blob/{default_branch}/SECURITY.md'
 
     return cast('_IssueData', issue_data)
 

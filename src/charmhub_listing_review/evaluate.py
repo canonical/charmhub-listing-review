@@ -160,6 +160,23 @@ def security_doc(security_url: str) -> str:
         return description
 
 
+def get_default_branch(repository_url: str) -> str:
+    """Get the default branch name for a repository using git ls-remote."""
+    try:
+        result = subprocess.run(
+            ['/usr/bin/git', 'ls-remote', '--symref', repository_url, 'HEAD'],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith('ref: refs/heads/'):
+                return line.split('refs/heads/')[1].split()[0]
+    except (subprocess.CalledProcessError, IndexError, ValueError):
+        pass
+    return 'main'
+
+
 def _clone_repo(charm_repo_url: str) -> pathlib.Path:
     """Clone the charm repository to a temporary directory."""
     temp_dir = tempfile.mkdtemp()
