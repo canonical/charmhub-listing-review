@@ -205,7 +205,7 @@ https://ci.example.com/integration
 ### Documentation Link
 https://docs.example.com
 
-### Default Branch
+### Review Branch
 26.04
 """
     mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
