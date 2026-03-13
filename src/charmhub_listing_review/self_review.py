@@ -175,7 +175,7 @@ def main():
     parser.add_argument('--ci-linting-url', help='URL to CI linting workflow')
     parser.add_argument(
         '--branch',
-        help='Default branch of the repository (auto-detected if not specified)',
+        help='Branch of the repository to review (auto-detected default branch if not specified)',
     )
 
     args = parser.parse_args()
