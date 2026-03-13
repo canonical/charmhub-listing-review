@@ -33,7 +33,7 @@ import json
 import pathlib
 import random
 import re
-import subprocess
+import subprocess  # noqa: S404
 import urllib.error
 import urllib.request
 from typing import TypedDict, cast
