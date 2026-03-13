@@ -172,7 +172,7 @@ def get_details_from_issue(issue_number: int):
         'ci_release_url': '### CI Release',
         'ci_integration_url': '### CI Integration Tests',
         'documentation_link': '### Documentation Link',
-        'default_branch': '### Default Branch',
+        'default_branch': '### Review Branch',
     }
 
     # Extract values for each field.
