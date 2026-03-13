@@ -27,10 +27,10 @@ import hashlib
 import pathlib
 import re
 import shutil
-import subprocess  # noqa: S404
+import subprocess
 import tempfile
 import tomllib
-import xml.etree.ElementTree as ET  # noqa: S405
+import xml.etree.ElementTree as ET
 from typing import Any
 
 import requests
@@ -44,6 +44,7 @@ def evaluate(
     contribution_url: str,
     license_url: str,
     security_url: str,
+    branch: str = '',
 ) -> list[str]:
     """Evaluate the charm for listing on Charmhub.
 
@@ -59,7 +60,7 @@ def evaluate(
     automation was unable to make a determination.
     """
     results: list[str] = []
-    repo_dir = _clone_repo(repository_url)
+    repo_dir = _clone_repo(repository_url, branch)
     try:
         results.append(coding_conventions(linting_url))
         results.append(contribution_guidelines(contribution_url))
@@ -178,12 +179,16 @@ def get_default_branch(repository_url: str) -> str:
     return 'main'
 
 
-def _clone_repo(charm_repo_url: str) -> pathlib.Path:
+def _clone_repo(charm_repo_url: str, branch: str = '') -> pathlib.Path:
     """Clone the charm repository to a temporary directory."""
     temp_dir = tempfile.mkdtemp()
     try:
+        cmd = ['/usr/bin/git', 'clone', '--depth', '1']
+        if branch:
+            cmd += ['--branch', branch]
+        cmd += [charm_repo_url, temp_dir]
         subprocess.run(
-            ['/usr/bin/git', 'clone', '--depth', '1', charm_repo_url, temp_dir],
+            cmd,
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

@@ -33,7 +33,7 @@ import json
 import pathlib
 import random
 import re
-import subprocess  # noqa: S404
+import subprocess
 import urllib.error
 import urllib.request
 from typing import TypedDict, cast
@@ -144,6 +144,7 @@ class _IssueData(TypedDict):
     ci_release_url: str
     ci_integration_url: str
     documentation_link: str
+    default_branch: str
     contribution_link: str
     license_link: str
     security_link: str
@@ -191,6 +192,7 @@ def get_details_from_issue(issue_number: int):
     default_branch = issue_data.get('default_branch') or get_default_branch(
         issue_data['project_repo']
     )
+    issue_data['default_branch'] = default_branch
     issue_data['contribution_link'] = (
         f'{issue_data["project_repo"]}/blob/{default_branch}/CONTRIBUTING.md'
     )
@@ -329,6 +331,7 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
         issue_data['contribution_link'],
         issue_data['license_link'],
         issue_data['security_link'],
+        issue_data['default_branch'],
     )
     for result in results:
         # Convert Sphinx refs in the result to match the converted comment.

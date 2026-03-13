@@ -109,6 +109,7 @@ def print_self_review_results(
                 contribution_url,
                 license_url,
                 security_url,
+                default_branch,
             )
 
             automated_checks = set()
