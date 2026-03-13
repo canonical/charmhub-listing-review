@@ -188,11 +188,12 @@ def get_details_from_issue(issue_number: int):
     # These have expected filenames, so we use those rather than require the author provide them.
     # This is quite specific to GitHub, but we can add support for other platforms if required,
     # and if they aren't found then the reviewer just has to locate them themselves.
-    default_branch = (
-        issue_data.get('default_branch')
-        or get_default_branch(issue_data['project_repo'])
+    default_branch = issue_data.get('default_branch') or get_default_branch(
+        issue_data['project_repo']
     )
-    issue_data['contribution_link'] = f'{issue_data["project_repo"]}/blob/{default_branch}/CONTRIBUTING.md'
+    issue_data['contribution_link'] = (
+        f'{issue_data["project_repo"]}/blob/{default_branch}/CONTRIBUTING.md'
+    )
     issue_data['license_link'] = f'{issue_data["project_repo"]}/blob/{default_branch}/LICENSE'
     issue_data['security_link'] = f'{issue_data["project_repo"]}/blob/{default_branch}/SECURITY.md'
 
