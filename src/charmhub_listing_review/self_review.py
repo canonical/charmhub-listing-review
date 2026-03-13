@@ -63,6 +63,7 @@ def print_self_review_results(
     charm_name: str,
     project_repo: str = '',
     ci_linting: str = '',
+    branch: str = '',
 ):
     """Print the self-review results to console."""
     print(f"\n\033[1m🔍 Charmhub Public Listing Self-Review for '{charm_name}'\033[0m")
@@ -95,7 +96,7 @@ def print_self_review_results(
 
     if project_repo:
         # Like update-issue, this assumes it's GitHub for now.
-        default_branch = get_default_branch(project_repo)
+        default_branch = branch or get_default_branch(project_repo)
         contribution_url = f'{project_repo}/blob/{default_branch}/CONTRIBUTING.md'
         license_url = f'{project_repo}/blob/{default_branch}/LICENSE'
         security_url = f'{project_repo}/blob/{default_branch}/SECURITY.md'
@@ -172,6 +173,10 @@ def main():
         help='URL of the charm repository (e.g., https://github.com/<user>/<workload>-operator)',
     )
     parser.add_argument('--ci-linting-url', help='URL to CI linting workflow')
+    parser.add_argument(
+        '--branch',
+        help='Default branch of the repository (auto-detected if not specified)',
+    )
 
     args = parser.parse_args()
 
@@ -184,6 +189,7 @@ def main():
             charm_name=args.charm_name,
             project_repo=args.repository,
             ci_linting=args.ci_linting_url or '',
+            branch=args.branch or '',
         )
     except KeyboardInterrupt:
         print('\n\n⚡ Review cancelled by user.')

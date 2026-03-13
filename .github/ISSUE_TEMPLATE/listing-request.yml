@@ -60,3 +60,12 @@ body:
       description: "Please provide the link to the charm's documentation."
     validations:
       required: true
+
+  - type: input
+    id: Default-Branch
+    attributes:
+      label: "Default Branch"
+      description: "If the default branch of the repository is not 'main', specify it here. Leave blank to auto-detect."
+      placeholder: main
+    validations:
+      required: false
