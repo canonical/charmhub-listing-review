@@ -65,7 +65,7 @@ body:
     id: Default-Branch
     attributes:
       label: "Default Branch"
-      description: "If the default branch of the repository is not 'main', specify it here. Leave blank to auto-detect."
-      placeholder: main
+      description: "If the review should not be against the default branch, specify the correct branch here. Leave blank to use the default branch (typically 'main')."
+      placeholder: 26.04
     validations:
       required: false
