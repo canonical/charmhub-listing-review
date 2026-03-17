@@ -146,6 +146,10 @@ https://demo.example.com
 ### Project Repository
 https://github.com/canonical/my-charm
 
+### Charm Directory
+
+_No response_
+
 ### CI Linting
 https://ci.example.com/lint
 
@@ -163,6 +167,7 @@ https://docs.example.com
     assert details['name'] == 'my-charm'
     assert details['demo_url'] == 'https://demo.example.com'
     assert details['project_repo'] == 'https://github.com/canonical/my-charm'
+    assert details['charm_dir'] == '.'
     assert details['ci_linting'] == 'https://ci.example.com/lint'
     assert details['ci_release_url'] == 'https://ci.example.com/release'
     assert details['ci_integration_url'] == 'https://ci.example.com/integration'
@@ -175,6 +180,38 @@ https://docs.example.com
     assert (
         details['security_link'] == 'https://github.com/canonical/my-charm/blob/main/SECURITY.md'
     )
+
+
+@mock.patch('subprocess.run')
+def test_get_details_from_issue_with_charm_dir(mock_subprocess_run):
+    issue_body = """
+### Charm name
+my-charm
+
+### Demo
+https://demo.example.com
+
+### Project Repository
+https://github.com/canonical/my-charm-operators
+
+### Charm Directory
+charms/my-charm
+
+### CI Linting
+https://ci.example.com/lint
+
+### CI Release
+https://ci.example.com/release
+
+### CI Integration Tests
+https://ci.example.com/integration
+
+### Documentation Link
+https://docs.example.com
+"""
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
+    details = update_issue.get_details_from_issue(123)
+    assert details['charm_dir'] == 'charms/my-charm'
 
 
 def test_issue_summary():

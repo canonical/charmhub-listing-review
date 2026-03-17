@@ -63,6 +63,7 @@ def print_self_review_results(
     charm_name: str,
     project_repo: str = '',
     ci_linting: str = '',
+    charm_dir: str = '.',
 ):
     """Print the self-review results to console."""
     print(f"\n\033[1m🔍 Charmhub Public Listing Self-Review for '{charm_name}'\033[0m")
@@ -107,6 +108,7 @@ def print_self_review_results(
                 contribution_url,
                 license_url,
                 security_url,
+                charm_dir=charm_dir,
             )
 
             automated_checks = set()
@@ -171,6 +173,14 @@ def main():
         help='URL of the charm repository (e.g., https://github.com/<user>/<workload>-operator)',
     )
     parser.add_argument('--ci-linting-url', help='URL to CI linting workflow')
+    parser.add_argument(
+        '--charm-dir',
+        default='.',
+        help=(
+            'Relative path to the charm directory within the repository '
+            '(default: repository root). Useful for monorepos.'
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -183,6 +193,7 @@ def main():
             charm_name=args.charm_name,
             project_repo=args.repository,
             ci_linting=args.ci_linting_url or '',
+            charm_dir=args.charm_dir,
         )
     except KeyboardInterrupt:
         print('\n\n⚡ Review cancelled by user.')

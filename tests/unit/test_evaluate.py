@@ -254,6 +254,43 @@ def test_metadata_links_parametrized(mock_head, tmp_path, yaml_content, link_ok,
     assert (result.startswith('* [x]')) == expected_checked
 
 
+def test_check_action_names_monorepo(tmp_path):
+    """Checks work when charm files are in a subdirectory (monorepo)."""
+    charm_dir = tmp_path / 'charms' / 'my-charm'
+    charm_dir.mkdir(parents=True)
+    charmcraft_yaml = charm_dir / 'charmcraft.yaml'
+    charmcraft_yaml.write_text("""
+name: my-charm
+actions:
+    valid-action: {}
+""")
+    result = evaluate.action_names(charm_dir)
+    assert result.startswith('* [x]')
+
+
+def test_python_requires_version_monorepo(tmp_path):
+    """pyproject.toml is found in a charm subdirectory."""
+    charm_dir = tmp_path / 'charms' / 'my-charm'
+    charm_dir.mkdir(parents=True)
+    pyproject = charm_dir / 'pyproject.toml'
+    pyproject.write_text("""
+[project]
+requires-python = ">=3.10"
+""")
+    result = evaluate.python_requires_version(charm_dir)
+    assert result.startswith('* [x]')
+
+
+def test_charm_has_icon_monorepo(tmp_path):
+    """icon.svg is found in a charm subdirectory."""
+    charm_dir = tmp_path / 'charms' / 'my-charm'
+    charm_dir.mkdir(parents=True)
+    icon = charm_dir / 'icon.svg'
+    icon.write_text('<svg width="100" height="100"></svg>')
+    result = evaluate.charm_has_icon(charm_dir)
+    assert result.startswith('* [x]')
+
+
 @pytest.mark.parametrize(
     'yaml_content,expected_checked',
     [
