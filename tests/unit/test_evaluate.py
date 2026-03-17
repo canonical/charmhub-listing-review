@@ -47,6 +47,75 @@ class TestGetDefaultBranch:
         assert evaluate.get_default_branch('https://github.com/org/repo') == 'main'
 
 
+class TestEvaluateCharmDir:
+    """Test that evaluate() correctly handles the charm_dir parameter."""
+
+    @mock.patch('charmhub_listing_review.evaluate._clone_repo')
+    def test_evaluate_with_charm_dir(self, mock_clone, tmp_path):
+        """evaluate() runs checks against the subdirectory."""
+        charm_subdir = tmp_path / 'charms' / 'my-charm'
+        charm_subdir.mkdir(parents=True)
+        (charm_subdir / 'charmcraft.yaml').write_text(
+            'name: my-charm\ntitle: My Charm\nsummary: A charm.\n'
+            'description: A charm that does things.\n'
+        )
+        (charm_subdir / 'pyproject.toml').write_text('[project]\nrequires-python = ">=3.10"\n')
+        mock_clone.return_value = tmp_path
+        results = evaluate.evaluate(
+            charm_name='my-charm',
+            repository_url='https://github.com/org/my-charm-operator',
+            linting_url='',
+            contribution_url='',
+            license_url='',
+            security_url='',
+            charm_dir='charms/my-charm',
+        )
+        # python_requires_version should pass because pyproject.toml is in the subdirectory.
+        python_result = [
+            r for r in results if 'requires-python' in r.lower() or 'requires_python' in r.lower()
+        ]
+        assert python_result
+        assert python_result[0].startswith('* [x]')
+
+    def test_evaluate_rejects_absolute_charm_dir(self):
+        with pytest.raises(ValueError, match='relative path'):
+            evaluate.evaluate(
+                charm_name='my-charm',
+                repository_url='https://github.com/org/repo',
+                linting_url='',
+                contribution_url='',
+                license_url='',
+                security_url='',
+                charm_dir='/etc',
+            )
+
+    def test_evaluate_rejects_traversal_charm_dir(self):
+        with pytest.raises(ValueError, match="'\\.\\.'"):
+            evaluate.evaluate(
+                charm_name='my-charm',
+                repository_url='https://github.com/org/repo',
+                linting_url='',
+                contribution_url='',
+                license_url='',
+                security_url='',
+                charm_dir='../../etc',
+            )
+
+    @mock.patch('charmhub_listing_review.evaluate._clone_repo')
+    def test_evaluate_rejects_nonexistent_charm_dir(self, mock_clone, tmp_path):
+        mock_clone.return_value = tmp_path
+        with pytest.raises(ValueError, match='does not exist'):
+            evaluate.evaluate(
+                charm_name='my-charm',
+                repository_url='https://github.com/org/repo',
+                linting_url='',
+                contribution_url='',
+                license_url='',
+                security_url='',
+                charm_dir='nonexistent',
+            )
+
+
 class TestCloneRepo:
     @mock.patch('subprocess.run')
     def test_clone_without_branch(self, mock_run):

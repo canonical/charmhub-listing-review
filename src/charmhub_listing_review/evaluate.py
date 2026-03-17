@@ -65,20 +65,18 @@ def evaluate(
     is useful for monorepos where charms live in subdirectories.
     """
     results: list[str] = []
+    charm_dir_path = pathlib.PurePosixPath(charm_dir)
+    if charm_dir_path.is_absolute() or '..' in charm_dir_path.parts:
+        raise ValueError(
+            f"charm_dir must be a relative path without '..' components, got: {charm_dir!r}"
+        )
     repo_dir = _clone_repo(repository_url, branch)
-        # Validate that charm_dir is a safe relative path within the cloned repo.
-        charm_dir_path = pathlib.PurePath(charm_dir)
-        if charm_dir_path.is_absolute() or any(part == ".." for part in charm_dir_path.parts):
-            raise ValueError(f"Invalid charm_dir '{charm_dir}': must be a relative path without '..'.")
-
-        resolved_charm_path = (repo_dir / charm_dir_path).resolve(strict=True)
-        if not resolved_charm_path.is_dir():
-            raise ValueError(f"Invalid charm_dir '{charm_dir}': path is not a directory.")
-        if resolved_charm_path != repo_dir and repo_dir not in resolved_charm_path.parents:
-            raise ValueError(f"Invalid charm_dir '{charm_dir}': path escapes the cloned repository.")
-
-        charm_path = resolved_charm_path
-        charm_path = repo_dir / charm_dir
+    try:
+        charm_path = (repo_dir / charm_dir).resolve()
+        if not charm_path.is_dir():
+            raise ValueError(f'charm_dir does not exist or is not a directory: {charm_dir!r}')
+        if not str(charm_path).startswith(str(repo_dir.resolve())):
+            raise ValueError(f'charm_dir resolves outside the repository: {charm_dir!r}')
         results.append(coding_conventions(linting_url))
         results.append(contribution_guidelines(contribution_url))
         results.append(license_statement(license_url))

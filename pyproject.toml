@@ -145,5 +145,9 @@ convention = "google"
 [tool.ruff.lint.flake8-builtins]
 builtins-ignorelist = ["id", "min", "map", "range", "type", "input", "format"]
 
+[tool.ty.environment]
+python = ".venv"
+extra-paths = ["src"]
+
 [tool.codespell]
 quiet-level = 3
