@@ -66,7 +66,18 @@ def evaluate(
     """
     results: list[str] = []
     repo_dir = _clone_repo(repository_url, branch)
-    try:
+        # Validate that charm_dir is a safe relative path within the cloned repo.
+        charm_dir_path = pathlib.PurePath(charm_dir)
+        if charm_dir_path.is_absolute() or any(part == ".." for part in charm_dir_path.parts):
+            raise ValueError(f"Invalid charm_dir '{charm_dir}': must be a relative path without '..'.")
+
+        resolved_charm_path = (repo_dir / charm_dir_path).resolve(strict=True)
+        if not resolved_charm_path.is_dir():
+            raise ValueError(f"Invalid charm_dir '{charm_dir}': path is not a directory.")
+        if resolved_charm_path != repo_dir and repo_dir not in resolved_charm_path.parents:
+            raise ValueError(f"Invalid charm_dir '{charm_dir}': path escapes the cloned repository.")
+
+        charm_path = resolved_charm_path
         charm_path = repo_dir / charm_dir
         results.append(coding_conventions(linting_url))
         results.append(contribution_guidelines(contribution_url))
