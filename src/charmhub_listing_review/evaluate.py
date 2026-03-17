@@ -44,6 +44,7 @@ def evaluate(
     contribution_url: str,
     license_url: str,
     security_url: str,
+    branch: str = '',
     charm_dir: str = '.',
 ) -> list[str]:
     """Evaluate the charm for listing on Charmhub.
@@ -64,7 +65,7 @@ def evaluate(
     is useful for monorepos where charms live in subdirectories.
     """
     results: list[str] = []
-    repo_dir = _clone_repo(repository_url)
+    repo_dir = _clone_repo(repository_url, branch)
     try:
         charm_path = repo_dir / charm_dir
         results.append(coding_conventions(linting_url))
@@ -166,12 +167,34 @@ def security_doc(security_url: str) -> str:
         return description
 
 
-def _clone_repo(charm_repo_url: str) -> pathlib.Path:
+def get_default_branch(repository_url: str) -> str:
+    """Get the default branch name for a repository using git ls-remote."""
+    try:
+        result = subprocess.run(
+            ['/usr/bin/git', 'ls-remote', '--symref', repository_url, 'HEAD'],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith('ref: refs/heads/'):
+                return line.split('refs/heads/')[1].split()[0]
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, IndexError, ValueError):
+        pass
+    return 'main'
+
+
+def _clone_repo(charm_repo_url: str, branch: str = '') -> pathlib.Path:
     """Clone the charm repository to a temporary directory."""
     temp_dir = tempfile.mkdtemp()
     try:
+        cmd = ['/usr/bin/git', 'clone', '--depth', '1']
+        if branch:
+            cmd += ['--branch', branch]
+        cmd += [charm_repo_url, temp_dir]
         subprocess.run(
-            ['/usr/bin/git', 'clone', '--depth', '1', charm_repo_url, temp_dir],
+            cmd,
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
