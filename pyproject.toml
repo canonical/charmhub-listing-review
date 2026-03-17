@@ -146,7 +146,7 @@ convention = "google"
 builtins-ignorelist = ["id", "min", "map", "range", "type", "input", "format"]
 
 [tool.ty.environment]
-python = ".venv"
+python-version = "3.12"
 extra-paths = ["src"]
 
 [tool.codespell]
