@@ -47,7 +47,7 @@ lint = [
 ]
 unit = [
     { name = "coverage", extras = ["toml"], specifier = "~=7.0" },
-    { name = "pytest", specifier = ">=8.4,<10.0" },
+    { name = "pytest", specifier = "~=9.0" },
 ]
 
 [[package]]
