@@ -107,7 +107,7 @@ A charm's documentation should focus on the charm itself. For workload-specific 
 
     # fmt: on
     try:
-        with urllib.request.urlopen(BEST_PRACTICE_SOURCE) as response:  # noqa: S310
+        with urllib.request.urlopen(BEST_PRACTICE_SOURCE) as response:
             best_practices_content = response.read().decode()
     except (urllib.error.URLError, urllib.error.HTTPError):
         best_practices = []
@@ -140,6 +140,7 @@ class _IssueData(TypedDict):
     name: str
     demo_url: str
     project_repo: str
+    charm_dir: str
     ci_linting: str
     ci_release_url: str
     ci_integration_url: str
@@ -171,6 +172,7 @@ def get_details_from_issue(issue_number: int, repo: str | None = None):
         'name': '### Charm name',
         'demo_url': '### Demo',
         'project_repo': '### Project Repository',
+        'charm_dir': '### Charm Directory',
         'ci_linting': '### CI Linting',
         'ci_release_url': '### CI Release',
         'ci_integration_url': '### CI Integration Tests',
@@ -188,6 +190,10 @@ def get_details_from_issue(issue_number: int, repo: str | None = None):
             issue_data[key] = value
         else:
             issue_data[key] = None
+
+    # Default charm_dir to '.' if not provided or empty.
+    if not issue_data.get('charm_dir') or issue_data['charm_dir'] == '_No response_':
+        issue_data['charm_dir'] = '.'
 
     # These have expected filenames, so we use those rather than require the author provide them.
     # This is quite specific to GitHub, but we can add support for other platforms if required,
@@ -338,6 +344,7 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
         issue_data['license_link'],
         issue_data['security_link'],
         issue_data['default_branch'],
+        charm_dir=issue_data.get('charm_dir', '.'),
     )
     for result in results:
         # Convert Sphinx refs in the result to match the converted comment.
