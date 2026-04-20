@@ -10,26 +10,7 @@ execute: |
   bash "$SPREAD_PATH"/tests/spread/lib/create-test-charm.sh "$CHARM_DIR" passing
 
   # Prepare the mock issue body (mimics the GitHub issue template output).
-  export MOCK_GH_ISSUE_BODY="### Charm name
-  test-charm
-
-  ### Demo
-  https://example.com/demo
-
-  ### Project Repository
-  file://$CHARM_DIR
-
-  ### CI Linting
-  https://example.com/lint
-
-  ### CI Release
-  https://example.com/release
-
-  ### CI Integration Tests
-  https://example.com/integration
-
-  ### Documentation Link
-  https://example.com/docs"
+  export MOCK_GH_ISSUE_BODY=$(sed "s|__CHARM_DIR__|$CHARM_DIR|g" issue-body.md)
 
   export MOCK_GH_COMMENTS="[]"
   export MOCK_GH_LOG=$(mktemp)
