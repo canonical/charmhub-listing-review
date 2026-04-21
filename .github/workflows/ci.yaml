@@ -75,7 +75,7 @@ jobs:
           go-version: 'stable'
 
       - name: Install spread
-        run: go install github.com/snapcore/spread/cmd/spread@latest
+        run: go install github.com/canonical/spread/cmd/spread@latest
 
       - name: Generate matrix list
         id: suites
@@ -118,7 +118,7 @@ jobs:
           go-version: 'stable'
 
       - name: Install spread
-        run: go install github.com/snapcore/spread/cmd/spread@latest
+        run: go install github.com/canonical/spread/cmd/spread@latest
 
       - name: Run integration tests
         env:
