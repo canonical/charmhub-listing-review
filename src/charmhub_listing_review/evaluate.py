@@ -25,6 +25,7 @@ against the listing requirements before submitting a listing request.
 
 import fnmatch
 import hashlib
+import math
 import pathlib
 import re
 import shutil
@@ -598,11 +599,13 @@ def charm_has_icon(repo_dir: pathlib.Path) -> str:
     if width and height:
         width_val = float(width.replace('px', ''))
         height_val = float(height.replace('px', ''))
-        correct_size = width_val == 100 and height_val == 100
+        correct_size = math.isclose(width_val, 100) and math.isclose(height_val, 100)
     elif view_box:
         parts = view_box.strip().split()
         if len(parts) == 4:
-            correct_size = float(parts[2]) == 100 and float(parts[3]) == 100
+            correct_size = math.isclose(float(parts[2]), 100) and math.isclose(
+                float(parts[3]), 100
+            )
     if not correct_size:
         return description
     # Having a valid icon.svg file is not enough on its own: unless the charm
