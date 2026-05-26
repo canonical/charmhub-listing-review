@@ -644,8 +644,9 @@ def _icon_included_in_build(charmcraft: dict[Any, Any]) -> bool:
         organize = part.get('organize')
         if isinstance(organize, dict):
             for dest in organize.values():
-                dest = str(dest).removeprefix('./')
-                if dest == 'icon.svg' or dest.endswith('/icon.svg'):
+                # charmhub only picks up `icon.svg` at the package root, so an
+                # `organize` dest in a subdirectory doesn't count.
+                if str(dest).removeprefix('./') == 'icon.svg':
                     return True
     return False
 

@@ -237,12 +237,36 @@ def test_charm_has_icon(tmp_path):
         # Leading ./ and glob entries also count as staging the icon.
         ('parts:\n  files:\n    plugin: dump\n    stage:\n      - ./icon.svg\n', True),
         ('parts:\n  files:\n    plugin: dump\n    prime:\n      - "*.svg"\n', True),
+        # `organize` that renames a file to `icon.svg` at the root.
+        (
+            'parts:\n  files:\n    plugin: dump\n    source: .\n'
+            '    organize:\n      assets/logo.svg: icon.svg\n',
+            True,
+        ),
+        # `organize` that places the icon at the root via a leading ./ prefix.
+        (
+            'parts:\n  files:\n    plugin: dump\n    source: .\n'
+            '    organize:\n      assets/logo.svg: ./icon.svg\n',
+            True,
+        ),
         # A non-charm plugin that does not stage the icon: it won't be packed.
         (
             'parts:\n  files:\n    plugin: dump\n    source: .\n    stage:\n      - foo.txt\n',
             False,
         ),
         ('parts:\n  app:\n    plugin: python\n    source: .\n', False),
+        # `organize` that places icon.svg in a subdirectory: the listing won't pick it up.
+        (
+            'parts:\n  files:\n    plugin: dump\n    source: .\n'
+            '    organize:\n      logo.svg: assets/icon.svg\n',
+            False,
+        ),
+        # `organize` that doesn't touch icon.svg at all.
+        (
+            'parts:\n  files:\n    plugin: dump\n    source: .\n'
+            '    organize:\n      foo.txt: bar.txt\n',
+            False,
+        ),
     ],
 )
 def test_charm_has_icon_included_in_build(tmp_path, parts, expected_checked):
