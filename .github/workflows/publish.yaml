@@ -33,6 +33,9 @@ jobs:
           uvx --from cyclonedx-bom cyclonedx-py environment .venv \
             --output-format JSON \
             --output-file sbom.cdx.json
+      # Two separate attestations: SLSA provenance (how it was built)
+      # and CycloneDX SBOM (what's inside). attest-build-provenance
+      # doesn't accept sbom-path, so the SBOM predicate needs its own call.
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
         with:
