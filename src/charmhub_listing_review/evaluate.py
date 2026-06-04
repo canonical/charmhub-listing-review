@@ -51,7 +51,7 @@ def _url_ok(url: str, *, method: str = 'HEAD', timeout: int = 5) -> bool:
 
 
 def _fetch_url(url: str, *, timeout: int = 5) -> str | None:
-    """Fetch ``url`` as text, or return ``None`` on any error or non-2xx status."""
+    """Fetch ``url`` as text, or return ``None`` on any error or non-2xx/3xx status."""
     try:
         request = urllib.request.Request(url, method='GET')  # noqa: S310
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
