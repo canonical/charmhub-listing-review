@@ -30,10 +30,60 @@ console in a user-friendly format instead of updating a GitHub issue.
 """
 
 import argparse
+import asyncio
+import contextlib
+import itertools
 import sys
+import threading
+import time
+from collections.abc import Generator
 
-from .evaluate import evaluate, get_default_branch
+from .ai_backend import resolve_backend
+from .ai_client import (
+    assess_documentation,
+    assess_metadata,
+    generate_summary,
+    strip_markdown_for_terminal,
+)
+from .evaluate import CheckResult, EvaluationResult, evaluate, get_default_branch
+from .sphinx_refs import convert_sphinx_refs
 from .update_issue import issue_comment
+
+
+@contextlib.contextmanager
+def _spinner(message: str) -> Generator[None, None, None]:
+    """Display a spinner on stderr while a slow operation runs.
+
+    Does nothing when stderr is not a terminal (e.g. CI environments).
+
+    Args:
+        message: Status message to show next to the spinner.
+    """
+    if not sys.stderr.isatty():
+        yield
+        return
+
+    frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+    stop = threading.Event()
+    width = len(message) + 4
+
+    def _run() -> None:
+        for frame in itertools.cycle(frames):
+            if stop.is_set():
+                break
+            sys.stderr.write(f'\r{frame} {message}')
+            sys.stderr.flush()
+            time.sleep(0.1)
+        sys.stderr.write(f'\r{" " * width}\r')
+        sys.stderr.flush()
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join()
 
 
 def format_checklist_for_console(checklist_markdown: str) -> str:
@@ -65,8 +115,14 @@ def print_self_review_results(
     ci_linting: str = '',
     branch: str = '',
     charm_dir: str = '.',
-):
-    """Print the self-review results to console."""
+    ai_backend_choice: str = 'auto',
+) -> EvaluationResult | None:
+    """Print the self-review results to console.
+
+    Returns the EvaluationResult if evaluation was performed.
+    """
+    backend, ai_unavailable_reason = resolve_backend(ai_backend_choice)
+
     print(f"\n\033[1m🔍 Charmhub Public Listing Self-Review for '{charm_name}'\033[0m")
     print('=' * (45 + len(charm_name)))
 
@@ -95,40 +151,49 @@ def print_self_review_results(
     # TODO: it would be great if we had a better wrapping story, both for GitHub and console.
     comment = comment.replace('are also\nrequired for listing.', 'are also required for listing.')
 
+    results: list[CheckResult] = []
+    charmcraft_data: dict | None = None
+    doc_context: dict = {}
+
     if project_repo:
         # Like update-issue, this assumes it's GitHub for now.
-        default_branch = branch or get_default_branch(project_repo)
+        with _spinner('Detecting default branch...'):
+            default_branch = branch or get_default_branch(project_repo, unauthenticated_first=True)
         contribution_url = f'{project_repo}/blob/{default_branch}/CONTRIBUTING.md'
         license_url = f'{project_repo}/blob/{default_branch}/LICENSE'
         security_url = f'{project_repo}/blob/{default_branch}/SECURITY.md'
 
         try:
-            results = evaluate(
-                charm_name,
-                project_repo,
-                ci_linting or '',
-                contribution_url,
-                license_url,
-                security_url,
-                default_branch,
-                charm_dir=charm_dir,
-            )
+            with _spinner('Cloning repository and running automated checks...'):
+                evaluation = evaluate(
+                    charm_name,
+                    project_repo,
+                    ci_linting or '',
+                    contribution_url,
+                    license_url,
+                    security_url,
+                    branch=default_branch,
+                    charm_dir=charm_dir,
+                    unauthenticated_first=True,
+                )
+            results = evaluation.checks
+            charmcraft_data = evaluation.charmcraft_data
+            doc_context = evaluation.doc_context
 
-            automated_checks = set()
             for result in results:
-                if not result:
+                if not result.description:
                     continue
 
-                unchecked_version = result.replace('* [x]', '* [ ]')
-                automated_checks.add(unchecked_version)
+                description = convert_sphinx_refs(result.description)
+                unchecked_version = description.replace('* [x]', '* [ ]')
                 if unchecked_version in comment:
-                    if result.startswith('* [x]'):
-                        comment = comment.replace(unchecked_version, result)
-                    else:
+                    if result.passed:
+                        comment = comment.replace(unchecked_version, description)
+                    elif result.passed is False:
                         failed_version = unchecked_version.replace('* [ ]', '* [o]')
                         comment = comment.replace(unchecked_version, failed_version)
+                    # passed is None means indeterminate, leave as '* [ ]' (unknown)
 
-            # For checks that weren't automated, we already leave them as '* [ ]' (unknown)
         except Exception as e:
             print('\n⚠️  Warning: Could not run automated checks on repository.')
             print(
@@ -142,6 +207,14 @@ def print_self_review_results(
             else:
                 print(f'   Error details: {e}')
 
+        ai_summary = ''
+        if results and backend is not None:
+            try:
+                with _spinner('Generating AI review summary...'):
+                    ai_summary = asyncio.run(generate_summary(backend, charm_name, results))
+            except Exception as e:
+                print(f'\n⚠️  Warning: AI review summary failed: {e}')
+
     formatted_checklist = format_checklist_for_console(comment)
     print(formatted_checklist)
 
@@ -153,6 +226,50 @@ def print_self_review_results(
         f'\n\033[1m📊 Progress: {completed_count} passed, {failed_count} failed, '
         f'{unknown_count} manual review needed\033[0m'
     )
+
+    ai_output_shown = False
+
+    # Print AI-driven outputs when available.
+    if results and backend is not None and ai_summary:
+        print('\n\033[1m🤖 AI Review Summary\033[0m')
+        print('-' * 40)
+        print(strip_markdown_for_terminal(ai_summary))
+        ai_output_shown = True
+
+    if backend is not None and doc_context:
+        try:
+            with _spinner('Assessing documentation with AI...'):
+                doc_assessment = asyncio.run(assess_documentation(backend, doc_context))
+            if doc_assessment:
+                print('\n\033[1m📄 AI Documentation Assessment\033[0m')
+                print('-' * 40)
+                print(strip_markdown_for_terminal(doc_assessment))
+                ai_output_shown = True
+        except Exception as e:
+            print(f'\n⚠️  Warning: AI documentation assessment failed: {e}')
+
+    if backend is not None and charmcraft_data:
+        try:
+            with _spinner('Assessing metadata with AI...'):
+                meta_assessment = asyncio.run(assess_metadata(backend, charmcraft_data))
+            if meta_assessment:
+                print('\n\033[1m📝 AI Metadata Assessment\033[0m')
+                print('-' * 40)
+                print(strip_markdown_for_terminal(meta_assessment))
+                ai_output_shown = True
+        except Exception as e:
+            print(f'\n⚠️  Warning: AI metadata assessment failed: {e}')
+
+    if ai_output_shown:
+        print(
+            '\n\033[33m⚠️  AI output is a suggestion only. '
+            'AI makes mistakes — please check the AI responses carefully '
+            'before acting on them.\033[0m'
+        )
+
+    if backend is None and ai_unavailable_reason:
+        print(f'\n⚠️  {ai_unavailable_reason}')
+
     print('\n💡 Note: This self-review covers automated checks only.')
     print('   A human reviewer will perform additional checks during the official review process.')
     print('\n📋 To submit your charm for official review, create an issue at:')
@@ -160,6 +277,14 @@ def print_self_review_results(
         '   https://github.com/canonical/charmhub-listing-review/issues/new?'
         'template=listing-request.yml'
     )
+
+    if results:
+        return EvaluationResult(
+            checks=results,
+            charmcraft_data=charmcraft_data,
+            doc_context=doc_context,
+        )
+    return None
 
 
 def main():
@@ -188,6 +313,12 @@ def main():
             '(default: repository root). Useful for monorepos.'
         ),
     )
+    parser.add_argument(
+        '--ai-backend',
+        choices=['copilot', 'snap', 'auto', 'none'],
+        default='auto',
+        help="AI backend to use (default: auto; use 'none' to disable AI)",
+    )
 
     args = parser.parse_args()
 
@@ -202,6 +333,7 @@ def main():
             ci_linting=args.ci_linting_url or '',
             branch=args.branch or '',
             charm_dir=args.charm_dir,
+            ai_backend_choice=args.ai_backend,
         )
     except KeyboardInterrupt:
         print('\n\n⚡ Review cancelled by user.')
