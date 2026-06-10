@@ -41,6 +41,14 @@ update-issue = "charmhub_listing_review.update_issue:main"
 self-review = "charmhub_listing_review.self_review:main"
 
 # Testing tools configuration
+[tool.pytest.ini_options]
+# Promote warnings (deprecations, resource-cleanup leaks, etc.) to errors so
+# they surface in CI rather than going unnoticed. Part of the Charm Tech
+# -Werror rollout (roadmap 26.10/w-error).
+filterwarnings = [
+    "error",
+]
+
 [tool.coverage.run]
 branch = true
 
