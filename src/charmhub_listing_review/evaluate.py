@@ -394,11 +394,13 @@ def repository_name(repository_url: str, charm_name: str) -> str:
         r'\s+',
         ' ',
         """
-    * [ ] Name the repository using the pattern ``<charm name>-operator`` for a single charm,
-      or ``<base charm name>-operators`` when the repository will hold multiple related charms.
-      For the charm name, see {external+charmcraft:ref}`Charmcraft | Specify a name
-      <specify-a-name>`. See [Create a repository and initialise it]
-      (#create-a-repository-and-initialise-it).
+    * [ ] If your charm operates a workload, name the repository `<charm name>-operator`.
+      For advice about the charm name, see [](#decide-your-charms-name). If your charm doesn't
+      operate a workload (as in the case of integrator charms and configurator charms), the
+      `-operator` suffix isn't needed. For example, `foo-integrator` and `bar-configurator`.
+      Repositories that contain multiple charms or one or more charms and other artefacts
+      (like Rocks) will need to use other naming patterns.
+      See [Create a repository](#create-a-repository).
     """,
     ).strip()
     repo_name = repository_url.rstrip('/').split('/')[-1]
@@ -407,6 +409,10 @@ def repository_name(repository_url: str, charm_name: str) -> str:
     single_pattern = f'{charm_name}-operator'
     multi_pattern = f'{charm_name}-operators'
     if repo_name in (single_pattern, multi_pattern):
+        return description.replace('* [ ]', '* [x]')
+    # Workload-less charms (integrator/configurator) don't need the ``-operator`` suffix —
+    # the repository can be named the same as the charm.
+    if charm_name.endswith(('-integrator', '-configurator')) and repo_name == charm_name:
         return description.replace('* [ ]', '* [x]')
     return description
 

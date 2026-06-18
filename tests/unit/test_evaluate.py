@@ -223,7 +223,17 @@ def test_security_doc(mock_url_ok, status, expected):
     'url,charm_name,expected',
     [
         ('https://github.com/canonical/foo-operator', 'foo', True),
+        ('https://github.com/canonical/foo-operators', 'foo', True),
         ('https://github.com/canonical/bar', 'foo', False),
+        ('https://github.com/canonical/data-integrator', 'data-integrator', True),
+        ('https://github.com/canonical/data-integrator-operator', 'data-integrator', True),
+        ('https://github.com/canonical/data-integrator', 'foo', False),
+        (
+            'https://github.com/canonical/request-authentication-configurator',
+            'request-authentication-configurator',
+            True,
+        ),
+        ('https://github.com/canonical/foo', 'foo', False),
     ],
 )
 def test_repository_name(url, charm_name, expected):
