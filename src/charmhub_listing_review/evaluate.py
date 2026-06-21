@@ -406,13 +406,14 @@ def repository_name(repository_url: str, charm_name: str) -> str:
     repo_name = repository_url.rstrip('/').split('/')[-1]
     if repo_name.endswith('.git'):
         repo_name = repo_name[:-4]
-    single_pattern = f'{charm_name}-operator'
-    multi_pattern = f'{charm_name}-operators'
-    if repo_name in (single_pattern, multi_pattern):
-        return description.replace('* [ ]', '* [x]')
-    # Workload-less charms (integrator/configurator) don't need the ``-operator`` suffix —
-    # the repository can be named the same as the charm.
-    if charm_name.endswith(('-integrator', '-configurator')) and repo_name == charm_name:
+    # Workload-less charms (integrator/configurator) don't need the ``-operator`` suffix,
+    # and the repository should be named the same as the charm — using the ``-operator``
+    # suffix is a hint that the name may not actually reflect a workload-less charm.
+    if charm_name.endswith(('-integrator', '-configurator')):
+        if repo_name == charm_name:
+            return description.replace('* [ ]', '* [x]')
+        return description
+    if repo_name in (f'{charm_name}-operator', f'{charm_name}-operators'):
         return description.replace('* [ ]', '* [x]')
     return description
 

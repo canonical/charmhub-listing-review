@@ -226,7 +226,7 @@ def test_security_doc(mock_url_ok, status, expected):
         ('https://github.com/canonical/foo-operators', 'foo', True),
         ('https://github.com/canonical/bar', 'foo', False),
         ('https://github.com/canonical/data-integrator', 'data-integrator', True),
-        ('https://github.com/canonical/data-integrator-operator', 'data-integrator', True),
+        ('https://github.com/canonical/data-integrator-operator', 'data-integrator', False),
         ('https://github.com/canonical/data-integrator', 'foo', False),
         (
             'https://github.com/canonical/request-authentication-configurator',
