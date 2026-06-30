@@ -191,7 +191,7 @@ def test_contribution_guidelines(mock_url_ok, status, expected):
 
 
 @mock.patch('charmhub_listing_review.evaluate._fetch_url')
-@pytest.mark.parametrize('license_hash', evaluate._known_licenses)
+@pytest.mark.parametrize('license_hash', sorted(evaluate._known_licenses))
 def test_license_statement_known_license(mock_fetch, license_hash):
     mock_fetch.return_value = 'Some License Version x.0, January 1979'
     with mock.patch('hashlib.sha512') as mock_hash:
