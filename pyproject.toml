@@ -49,6 +49,9 @@ self-review = "charmhub_listing_review.self_review:main"
 # rushed release is quarantined for a week before it can end up in uv.lock.
 # Rolling window: re-evaluated relative to the current time on every resolve.
 exclude-newer = "7 days"
+# Refuse to install from source distributions; only wheels are accepted.
+# A one-off exception, if ever needed, is [tool.uv].no-build-package = [...].
+no-build = true
 
 # Testing tools configuration
 [tool.pytest.ini_options]
