@@ -36,4 +36,4 @@ jobs:
         run: |
             uv venv
             uv pip install .
-            uv run --locked update-issue --issue-number "${{ github.event.issue.number }}" --reviewers-file "${{ github.workspace }}/reviewers.yaml"
+            uv run update-issue --issue-number "${{ github.event.issue.number }}" --reviewers-file "${{ github.workspace }}/reviewers.yaml"

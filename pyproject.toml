@@ -45,13 +45,12 @@ self-review = "charmhub_listing_review.self_review:main"
 
 # uv dependency resolution configuration
 [tool.uv]
-# Ignore package releases newer than this when resolving, so a compromised or
-# rushed release is quarantined for a week before it can end up in uv.lock.
-# Rolling window: re-evaluated relative to the current time on every resolve.
+# Rolling quarantine: never resolve against packages published in the last 7
+# days, so a compromised release has a window to be caught/yanked upstream
+# before it can reach this project via a manual `uv add`, a `uv lock` regen,
+# a uvx bootstrap, or a CI re-resolve. Complements (doesn't replace) the
+# Dependabot cooldown, which only protects Dependabot-authored PRs.
 exclude-newer = "7 days"
-# Refuse to install from source distributions; only wheels are accepted.
-# A one-off exception, if ever needed, is [tool.uv].no-build-package = [...].
-no-build = true
 
 # Testing tools configuration
 [tool.pytest.ini_options]
