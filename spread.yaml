@@ -73,7 +73,6 @@ suites:
 exclude:
   - .git
   - .github
-  - .tox
   - .ruff_cache
 
 path: /root/proj
@@ -89,7 +88,7 @@ prepare: |
 
   pushd "$SPREAD_PATH"
   uv venv
-  uv pip install -e . openai tox tox-uv
+  uv pip install -e . openai
 
 restore: |
   rm -rf "$SPREAD_PATH/.venv"
