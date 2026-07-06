@@ -20,11 +20,11 @@ integration:  # Run integration tests via spread, for example: make integration 
 	spread -v $(ARGS)
 
 lint:  # Perform linting, spell checking, and static type checks
-	uv run --locked --group lint ruff check --preview
-	uv run --locked --group lint ruff format --preview --check
-	uv run --locked --group lint codespell $(ARGS)
-	uv run --locked --group lint --group unit ty check $(ARGS)
+	uv run --frozen --group lint ruff check --preview
+	uv run --frozen --group lint ruff format --preview --check
+	uv run --frozen --group lint codespell $(ARGS)
+	uv run --frozen --group lint --group unit ty check $(ARGS)
 
 unit:  # Run unit tests, for example: make unit ARGS='tests/unit/test_evaluate.py::test_check_charm_name'
-	uv run --locked --group unit coverage run --source=. --branch -m pytest -v --tb native $(ARGS)
-	uv run --locked --group unit coverage report
+	uv run --frozen --group unit coverage run --source=. --branch -m pytest -v --tb native $(ARGS)
+	uv run --frozen --group unit coverage report
