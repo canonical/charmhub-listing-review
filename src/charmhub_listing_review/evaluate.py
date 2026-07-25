@@ -45,7 +45,7 @@ def _url_ok(url: str, *, method: str = 'HEAD', timeout: int = 5) -> bool:
     try:
         request = urllib.request.Request(url, method=method)  # noqa: S310
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-            # file:// responses have status=None; treat a successful open as OK.
+            # file:// responses have no status; a successful urlopen means the file exists.
             return response.status is None or response.status < 400
     except (urllib.error.URLError, OSError, ValueError):
         return False
