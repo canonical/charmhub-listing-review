@@ -45,7 +45,8 @@ def _url_ok(url: str, *, method: str = 'HEAD', timeout: int = 5) -> bool:
     try:
         request = urllib.request.Request(url, method=method)  # noqa: S310
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-            return response.status < 400
+            # file:// responses have no status; a successful urlopen means the file exists.
+            return response.status is None or response.status < 400
     except (urllib.error.URLError, OSError, ValueError):
         return False
 
@@ -55,7 +56,7 @@ def _fetch_url(url: str, *, timeout: int = 5) -> str | None:
     try:
         request = urllib.request.Request(url, method='GET')  # noqa: S310
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-            if response.status >= 400:
+            if response.status is not None and response.status >= 400:
                 return None
             return response.read().decode('utf-8', errors='replace')
     except (urllib.error.URLError, OSError, ValueError):
@@ -500,7 +501,7 @@ def charmcraft_tooling(repo_dir: pathlib.Path) -> str:
     for command in commands_to_run:
         try:
             subprocess.check_output(command, stderr=subprocess.DEVNULL)
-        except subprocess.CalledProcessError:
+        except (subprocess.CalledProcessError, FileNotFoundError):
             return description
 
     if all(command in found_commands for command in commands):
@@ -591,7 +592,7 @@ def repo_has_lock_file(repo_dir: pathlib.Path) -> str:
     """,
     ).strip()
     lock_files = ['poetry.lock', 'uv.lock']
-    if not repo_dir / 'pyproject.toml':
+    if not (repo_dir / 'pyproject.toml').is_file():
         return description
     if any((repo_dir / lock_file).is_file() for lock_file in lock_files):
         return description.replace('* [ ]', '* [x]')
@@ -601,7 +602,12 @@ def repo_has_lock_file(repo_dir: pathlib.Path) -> str:
 def charm_has_icon(repo_dir: pathlib.Path) -> str:
     """The charm has an icon.
 
-    Requirements:
+    Having an icon is a recommendation, not a requirement, for public listing. See
+    the 2026-06-30 charm-tech decision on softening the logo requirement while
+    a stronger process is worked out with design/web/store. If the charm does
+    provide an icon, it must still meet the requirements below.
+
+    Requirements (when an icon is provided):
      * Canvas size must be 100x100 pixels.
      * The icon must consist of a circle with a flat color and a logo - any other detail is up to
        you, but it's a good idea to also conform to best practices.
@@ -617,7 +623,7 @@ def charm_has_icon(repo_dir: pathlib.Path) -> str:
      * Do not use glossy materials unless they are parts of a logo that you are not allowed to
        modify.
     """
-    description = '* [ ] The charm has an icon.'
+    description = '* [ ] The charm has an icon (recommended).'
     icon_path = repo_dir / 'icon.svg'
     if not icon_path.is_file():
         return description

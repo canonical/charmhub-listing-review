@@ -81,7 +81,7 @@ def print_self_review_results(
     ### Basic Requirements
 * [ ] The charm does what it is meant to do, demonstrated in a demo or by following a tutorial.
 * [ ] The charm's page on Charmhub provides a quality impression. The overall appearance looks good and the documentation looks reasonable.
-* [ ] The charm has an icon.
+* [ ] The charm has an icon (recommended).
 * [ ] Automated releasing to unstable channels exists
 * [ ] Integration tests exist, are run on every change to the default branch, and are passing. At minimum, the tests verify that the charm can be deployed and ends up in a success state, and that the charm can be integrated with at least one example for each 'provides' and 'requires' specified (including optional, excluding tracing) ending up in a success state.
 
@@ -95,11 +95,18 @@ def print_self_review_results(
     comment = comment.replace('are also\nrequired for listing.', 'are also required for listing.')
 
     if project_repo:
-        # Like update-issue, this assumes it's GitHub for now.
         default_branch = branch or get_default_branch(project_repo)
-        contribution_url = f'{project_repo}/blob/{default_branch}/CONTRIBUTING.md'
-        license_url = f'{project_repo}/blob/{default_branch}/LICENSE'
-        security_url = f'{project_repo}/blob/{default_branch}/SECURITY.md'
+        if project_repo.startswith('file://'):
+            charm_subdir = '' if charm_dir in ('', '.') else f'/{charm_dir.strip("/")}'
+            base = f'{project_repo.rstrip("/")}{charm_subdir}'
+            contribution_url = f'{base}/CONTRIBUTING.md'
+            license_url = f'{base}/LICENSE'
+            security_url = f'{base}/SECURITY.md'
+        else:
+            # Like update-issue, this assumes it's GitHub for now.
+            contribution_url = f'{project_repo}/blob/{default_branch}/CONTRIBUTING.md'
+            license_url = f'{project_repo}/blob/{default_branch}/LICENSE'
+            security_url = f'{project_repo}/blob/{default_branch}/SECURITY.md'
 
         try:
             results = evaluate(
@@ -123,7 +130,7 @@ def print_self_review_results(
                 if unchecked_version in comment:
                     if result.startswith('* [x]'):
                         comment = comment.replace(unchecked_version, result)
-                    else:
+                    elif '(recommended)' not in unchecked_version:
                         failed_version = unchecked_version.replace('* [ ]', '* [o]')
                         comment = comment.replace(unchecked_version, failed_version)
 
