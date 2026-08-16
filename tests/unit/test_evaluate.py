@@ -212,12 +212,10 @@ def test_check_charm_name(charm_name, expected):
 
 
 def test_check_charm_name_text_matches_the_checklist_item():
-    """The tick is applied by substring replacement, so the text must match.
+    """Check that `check_charm_name`'s text appears verbatim in `issue_comment`.
 
-    `apply_automated_checks` swaps the unticked description for the ticked one
-    only if the unticked text appears verbatim in the comment. Until this
-    check's bullet was added to `issue_comment`, its tick landed on nothing --
-    the same defect that #160 fixed for three other checks.
+    This is important because `apply_automated_checks` ticks requirements by
+    matching the unticked text then swapping in the ticked text.
     """
     unticked = evaluate.check_charm_name('Not-A-Valid-Name')
     comment = update_issue.issue_comment(

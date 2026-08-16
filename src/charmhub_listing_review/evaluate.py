@@ -334,11 +334,6 @@ def _validate_charm_name(name: str) -> bool:
     no organisation or publisher, and that ``-k8s`` is used only where a
     machine variant exists or could exist -- need knowledge this function does
     not have, and are left to the reviewer.
-
-    Note this is deliberately *not* ``_validate_action_or_config_name``, which
-    this check previously borrowed. That one is correct for its own purpose but
-    enforces none of the charm-specific rules, so it ticked names like
-    ``mega-calendar-operator``.
     """
     if not name:
         return False
@@ -366,9 +361,9 @@ def check_charm_name(charm_name: str) -> str:
         r'\s+',
         ' ',
         """
-    * [ ] The charm's name follows the pattern `<workload name>[-<function>][-k8s]`, contains only
-    ASCII lowercase letters, numbers, and hyphens, and includes neither an organisation or
-    publisher name nor an `operator` or `charm` prefix or suffix. See
+    * [ ] The charm's name follows the pattern `<workload name>[-<function>][-k8s]` and contains
+    only ASCII lowercase letters, numbers, and hyphens. It doesn't include `operator` or `charm`
+    as a prefix or suffix, or an organisation or publisher name. See
     [Decide your charm's name](https://canonical.com/juju/docs/ops/latest/howto/initialise-your-project/#decide-your-charm-s-name).
     """,
     ).strip()
