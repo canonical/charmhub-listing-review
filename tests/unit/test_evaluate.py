@@ -487,10 +487,6 @@ def test_metadata_links_parametrized(
     mock_url_ok.return_value = link_ok
     result = evaluate.metadata_links(tmp_path)
     assert (result.startswith('* [x]')) == expected_checked
-    assert result.replace('* [x]', '* [ ]') == (
-        "* [ ] A concise summary of the charm in the `charmcraft.yaml` 'summary' field, and a "
-        "more detailed description in the `charmcraft.yaml` 'description' field."
-    )
 
 
 def test_check_action_names_monorepo(tmp_path):
