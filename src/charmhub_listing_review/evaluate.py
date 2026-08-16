@@ -29,12 +29,12 @@ import math
 import pathlib
 import re
 import shutil
-import subprocess  # noqa: S404
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import tempfile
 import tomllib
 import urllib.error
 import urllib.request
-import xml.etree.ElementTree as ET  # noqa: S405
+import xml.etree.ElementTree as ET  # ruff: ignore[suspicious-xml-etree-import]
 from typing import Any
 
 import yaml
@@ -45,8 +45,8 @@ from ._models import CheckResult, EvaluationResult
 def _url_ok(url: str, *, method: str = 'HEAD', timeout: int = 5) -> bool:
     """Whether ``url`` resolves with a successful (non-error) status."""
     try:
-        request = urllib.request.Request(url, method=method)  # noqa: S310
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+        request = urllib.request.Request(url, method=method)  # ruff: ignore[suspicious-url-open-usage]
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # ruff: ignore[suspicious-url-open-usage]
             # file:// responses have no status; a successful urlopen means the file exists.
             return response.status is None or response.status < 400
     except (urllib.error.URLError, OSError, ValueError):
@@ -56,13 +56,31 @@ def _url_ok(url: str, *, method: str = 'HEAD', timeout: int = 5) -> bool:
 def _fetch_url(url: str, *, timeout: int = 5) -> str | None:
     """Fetch ``url`` as text, or return ``None`` on any error or non-2xx/3xx status."""
     try:
-        request = urllib.request.Request(url, method='GET')  # noqa: S310
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+        request = urllib.request.Request(url, method='GET')  # ruff: ignore[suspicious-url-open-usage]
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # ruff: ignore[suspicious-url-open-usage]
             if response.status is not None and response.status >= 400:
                 return None
             return response.read().decode('utf-8', errors='replace')
     except (urllib.error.URLError, OSError, ValueError):
         return None
+
+
+_github_blob_url = re.compile(r'^https://github\.com/(?P<repo>[^/]+/[^/]+)/blob/(?P<path>.+)$')
+
+
+def _raw_content_url(url: str) -> str:
+    """Convert a GitHub web URL to the URL that serves the file's contents.
+
+    Fetching a ``github.com/.../blob/...`` URL returns the rendered HTML page,
+    not the file, so any check that inspects file *content* needs the
+    ``raw.githubusercontent.com`` equivalent. URLs that aren't GitHub blob
+    URLs - including the ``file://`` URLs used for local self-review - are
+    returned unchanged.
+    """
+    match = _github_blob_url.match(url)
+    if match is None:
+        return url
+    return f'https://raw.githubusercontent.com/{match["repo"]}/{match["path"]}'
 
 
 def evaluate(
@@ -108,7 +126,6 @@ def evaluate(
         results.append(repository_name(repository_url, charm_name))
         results.append(relations_includes_optional(charm_path))
         results.append(charmcraft_tooling(charm_path))
-        results.append(charm_plugin_strict_dependencies(charm_path))
         results.append(python_requires_version(charm_path))
         results.append(repo_has_lock_file(charm_path))
         results.append(charm_has_icon(charm_path))
@@ -119,20 +136,26 @@ def evaluate(
 
 
 def coding_conventions(linting_url: str) -> CheckResult:
-    """Checks for coding conventions are reasonable and implemented in CI.
+    """The charm's quality assurance pipeline is automated using a CI system.
 
     The source code of the charm is accessible in the sense of approachability.
     Consistent source code style and formatting are also considered a sign of
     being committed to quality.
     """
-    # We'll work on automating this in the future. Before we do that, we'll want
-    # to figure out how much consistency there is in CI across charms, and if we
-    # should encourage more.
+    description = (
+        '* [ ] The quality assurance pipeline of a charm should be automated '
+        'using a continuous integration (CI) system.'
+    )
+    context: dict[str, Any] = {'linting_url': linting_url}
+    # Ideally, this would also check that the CI actually runs linting, but that
+    # is more difficult to automate.
+    passed = _url_ok(linting_url)
     return CheckResult(
         name='coding_conventions',
-        passed=None,
-        description='* [ ] The charm implements coding conventions in CI.',
-        context={'linting_url': linting_url},
+        passed=passed,
+        description=description.replace('* [ ]', '* [x]') if passed else description,
+        context=context,
+        checklist_id='best-practice-automated-ci',
     )
 
 
@@ -164,11 +187,11 @@ def contribution_guidelines(contribution_url: str) -> CheckResult:
 
 
 _known_licenses = {
-    'fdae7ed259455ca9fa45939e7f25cbb4de29831cda16d9151de25a5f6e9d9be43b053f4fd3b896026239fca77abce04f543d591c501ecf4ce18c854bc0a51660',  # Apache 2.0  # noqa: E501
-    '5ae83c5b0ac7ed6469b38ed11f33b3d1dfabc9eaee8fff6a2e3d5e23b45e5f899a2bec93865c33868e83d0c8e4bff2c0dd0ebf0c3a390903a1f4d9ac7d9ab29e',  # GPL 2  # noqa: E501
-    '56a2f53e2df8adf4b55edf328579a74b1358f7f177b5242bd97dd79a8d26bc93f9dcc96dbdd6854627a96b73deb9ccaada6862f581ad1c8f6a2f3fe0849db005',  # GPL 3  # noqa: E501
-    '0906b47a8ae8ec763c6e548f42582d82fd8c8fa62403cd2b00a94d547277c98e65ce9d505d476b707c10c8aacd2d8094c594ba1e12d3c67cd658981c4bd2fe83',  # LGPL 3  # noqa: E501
-    'f5a0456e775e047c6c91571cf004a42cd04b3962ee882bc7c23d62a9a4d95bb310bfaaeb6a16bd777990eb564cc6c9ef13d7b3028f0d62ed2636ca083de6439a',  # MPL 2.0  # noqa: E501
+    'fdae7ed259455ca9fa45939e7f25cbb4de29831cda16d9151de25a5f6e9d9be43b053f4fd3b896026239fca77abce04f543d591c501ecf4ce18c854bc0a51660',  # Apache 2.0  # ruff: ignore[line-too-long]
+    '5ae83c5b0ac7ed6469b38ed11f33b3d1dfabc9eaee8fff6a2e3d5e23b45e5f899a2bec93865c33868e83d0c8e4bff2c0dd0ebf0c3a390903a1f4d9ac7d9ab29e',  # GPL 2  # ruff: ignore[line-too-long]
+    '56a2f53e2df8adf4b55edf328579a74b1358f7f177b5242bd97dd79a8d26bc93f9dcc96dbdd6854627a96b73deb9ccaada6862f581ad1c8f6a2f3fe0849db005',  # GPL 3  # ruff: ignore[line-too-long]
+    '0906b47a8ae8ec763c6e548f42582d82fd8c8fa62403cd2b00a94d547277c98e65ce9d505d476b707c10c8aacd2d8094c594ba1e12d3c67cd658981c4bd2fe83',  # LGPL 3  # ruff: ignore[line-too-long]
+    'f5a0456e775e047c6c91571cf004a42cd04b3962ee882bc7c23d62a9a4d95bb310bfaaeb6a16bd777990eb564cc6c9ef13d7b3028f0d62ed2636ca083de6439a',  # MPL 2.0  # ruff: ignore[line-too-long]
 }
 
 
@@ -180,7 +203,7 @@ def license_statement(license_url: str) -> CheckResult:
     """
     description = '* [ ] The charm provides a license statement.'
     context: dict[str, Any] = {'url': license_url}
-    text = _fetch_url(license_url)
+    text = _fetch_url(_raw_content_url(license_url))
     if text is None:
         return CheckResult(
             name='license_statement',
@@ -295,13 +318,20 @@ def metadata_links(repo_dir: pathlib.Path) -> CheckResult:
     values. A links field includes fields for documentation, issues, source,
     website, and contact, which all resolve with a 2xx status code.
     """
-    description = '* [ ] charmcraft.yaml includes required metadata.'
+    description = (
+        "* [ ] A concise summary of the charm in the `charmcraft.yaml` 'summary' field, and a "
+        "more detailed description in the `charmcraft.yaml` 'description' field."
+    )
     context: dict[str, Any] = {}
     data = _get_charmcraft_yaml(repo_dir)
     if not data:
         context['error'] = 'charmcraft.yaml not found or invalid'
         return CheckResult(
-            name='metadata_links', passed=False, description=description, context=context
+            name='metadata_links',
+            passed=False,
+            description=description,
+            context=context,
+            checklist_id='charmcraft-summary-description',
         )
     default_desc = """A single sentence that says what the charm is, concisely and memorably.
 
@@ -324,7 +354,11 @@ Finally, a paragraph that describes whom the charm is useful for.\n"""
     if missing_fields:
         context['missing_or_default_fields'] = missing_fields
         return CheckResult(
-            name='metadata_links', passed=False, description=description, context=context
+            name='metadata_links',
+            passed=False,
+            description=description,
+            context=context,
+            checklist_id='charmcraft-summary-description',
         )
 
     links = data.get('links', {})
@@ -343,7 +377,11 @@ Finally, a paragraph that describes whom the charm is useful for.\n"""
     if broken_links:
         context['broken_links'] = broken_links
         return CheckResult(
-            name='metadata_links', passed=False, description=description, context=context
+            name='metadata_links',
+            passed=False,
+            description=description,
+            context=context,
+            checklist_id='charmcraft-summary-description',
         )
 
     return CheckResult(
@@ -351,6 +389,7 @@ Finally, a paragraph that describes whom the charm is useful for.\n"""
         passed=True,
         description=description.replace('* [ ]', '* [x]'),
         context=context,
+        checklist_id='charmcraft-summary-description',
     )
 
 
@@ -365,35 +404,57 @@ def _validate_action_or_config_name(name: str) -> bool:
     return True
 
 
-def check_charm_name(charm_name: str) -> CheckResult:
-    """The charm's name is aligns with best practices.
+_RESERVED_NAME_SEGMENTS = frozenset({'charm', 'operator'})
+_CHARM_NAME_CHARACTERS = frozenset('abcdefghijklmnopqrstuvwxyz0123456789-')
 
-    The charm's name is lowercase alphanumeric, with hyphens (-) to separate
-    words. The charm name is not the same as the repository name.
+
+def _validate_charm_name(name: str) -> bool:
+    """Whether ``name`` satisfies the mechanically checkable naming rules.
+
+    Covers only the rules that can be decided from the name alone: the
+    character set, hyphen placement, and the banned ``charm``/``operator``
+    prefix and suffix. The remaining documented rules -- that the name carries
+    no organisation or publisher, and that ``-k8s`` is used only where a
+    machine variant exists or could exist -- need knowledge this function does
+    not have, and are left to the reviewer.
     """
-    # TODO: set checklist_id once canonical/charmcraft adds `:name:` to its
-    # 'charm name slug-oriented' best practice admonition.
-    # This has to match the description in the Charmcraft documentation.
+    if not name:
+        return False
+    # Not `islower()`/`isalnum()`: those accept non-ASCII letters and digits,
+    # and the documented rule is ASCII lowercase specifically.
+    if not set(name) <= _CHARM_NAME_CHARACTERS:
+        return False
+    if '--' in name or name.startswith('-') or name.endswith('-'):
+        return False
+    segments = name.split('-')
+    return not (segments[0] in _RESERVED_NAME_SEGMENTS or segments[-1] in _RESERVED_NAME_SEGMENTS)
+
+
+def check_charm_name(charm_name: str) -> CheckResult:
+    """The charm's name aligns with the documented naming convention.
+
+    Source of truth is "Decide your charm's name" in the ops how-to guide:
+    ASCII lowercase letters, numbers and hyphens, following the pattern
+    ``<workload name>[-<function>][-k8s]``, with no organisation or publisher
+    name and no ``operator``/``charm`` prefix or suffix.
+    """
     description = re.sub(
         r'\s+',
         ' ',
         """
-    * [ ] The charm name should be slug-oriented (ASCII lowercase letters, numbers, and hyphens)
-    and follow the pattern ``<workload name in full>[<function>][-k8s]``. For example,
-    ``argo-server-k8s``. Include the ``-k8s`` suffix on all charms that run on a Kubernetes cloud,
-    unless the charm has no workload or you know that there will never be a machine version of the
-    charm. Don't include an organization or publisher in the name. Don't add an ``operator`` or
-    ``charm`` prefix or suffix. For naming a repository, see
-    {external+charmcraft:ref}`initialise-a-charm`.
-    See {external+charmcraft:ref}`name <charmcraft-yaml-key-name>`.
+    * [ ] The charm's name follows the pattern `<workload name>[-<function>][-k8s]` and contains
+    only ASCII lowercase letters, numbers, and hyphens. It doesn't include `operator` or `charm`
+    as a prefix or suffix, or an organisation or publisher name. See
+    [Decide your charm's name](https://canonical.com/juju/docs/ops/latest/howto/initialise-your-project/#decide-your-charm-s-name).
     """,
     ).strip()
-    passed = _validate_action_or_config_name(charm_name)
+    passed = _validate_charm_name(charm_name)
     return CheckResult(
         name='check_charm_name',
         passed=passed,
         description=description.replace('* [ ]', '* [x]') if passed else description,
         context={'charm_name': charm_name},
+        checklist_id='charm-name',
     )
 
 
@@ -502,7 +563,7 @@ def repository_name(repository_url: str, charm_name: str) -> CheckResult:
       operate a workload (as in the case of integrator charms and configurator charms), the
       `-operator` suffix isn't needed. For example, `foo-integrator` and `bar-configurator`.
       Repositories that contain multiple charms or one or more charms and other artefacts
-      (like Rocks) will need to use other naming patterns.
+      (like rocks) will need to use other naming patterns.
       See [Create a repository](#create-a-repository).
     """,
     ).strip()
@@ -672,36 +733,6 @@ def charmcraft_tooling(repo_dir: pathlib.Path) -> CheckResult:
     )
 
 
-def charm_plugin_strict_dependencies(repo_dir: pathlib.Path) -> CheckResult:
-    """The charm plugin is configured with strict dependencies.
-
-    When using the `charm` plugin with charmcraft, ensure that you set strict
-    dependencies to true.
-
-    The repository contains a `charmcraft.yaml` file that includes building the
-    charm. If the charm uses the `charm` plugin, it should have a
-    `strict-dependencies: true` field.
-    """
-    # TODO: This has quadruple quotes in the doc, to handle an embedded example.
-    # Ideally, we can rework the docs to avoid that, rather than trying to
-    # handle it here. There's another case too, that isn't automated (log
-    # construction).
-    # This has to match the description in the Charmcraft documentation.
-    description = re.sub(
-        r'\s+',
-        ' ',
-        """
-    * [ ] When using the `charm` plugin with charmcraft, ensure that you set strict dependencies to
-    true. For example:
-    """,
-    ).strip()
-    return CheckResult(
-        name='charm_plugin_strict_dependencies',
-        passed=None,
-        description=description,
-    )
-
-
 def python_requires_version(repo_dir: pathlib.Path) -> CheckResult:
     """The charm's `pyproject.toml` specifies the required Python version.
 
@@ -853,7 +884,7 @@ def charm_has_icon(repo_dir: pathlib.Path) -> CheckResult:
             checklist_id='charm-has-icon',
             optional=True,
         )
-    tree = ET.parse(icon_path)  # noqa: S314
+    tree = ET.parse(icon_path)  # ruff: ignore[suspicious-xml-element-tree-usage]
     root = tree.getroot()
     width = root.attrib.get('width')
     height = root.attrib.get('height')
@@ -971,7 +1002,7 @@ If the charm provides a general library, the library's module docstring must con
 * [ ] the purpose of the library
 * [ ] the intended audience for the library: is this library intended for use only by the charm or the charming team, or is it a public library intended for anyone to use in their charm?
 * [ ] guidance on how to start using the library
-""".strip(),  # noqa: E501
+""".strip(),  # ruff: ignore[line-too-long]
         )
     )
     # fmt: on
