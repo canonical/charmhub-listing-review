@@ -14,7 +14,7 @@ execute: |
     self-review \
       --charm-name test-charm \
       --repository "file://$CHARM_DIR" \
-      --ci-linting-url "file://$CHARM_DIR/README.md" 2>&1) || true
+      --ci-linting-url "file://$CHARM_DIR/Makefile" 2>&1) || true
 
   echo "$output"
 
