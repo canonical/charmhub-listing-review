@@ -182,9 +182,7 @@ config:
         ('foo-integrator', True),
         ('bar-configurator', True),
         ('postgresql', True),
-        # "Don't add an `operator` or `charm` prefix/suffix." Every one of
-        # these was ticked before this check stopped borrowing
-        # _validate_action_or_config_name.
+        # Don't allow an `operator` or `charm` prefix/suffix.
         ('mega-calendar-operator', False),
         ('mega-calendar-charm', False),
         ('operator-mega-calendar', False),
