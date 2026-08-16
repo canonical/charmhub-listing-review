@@ -14,7 +14,7 @@
 
 """Test the automated criteria evaluation."""
 
-import subprocess  # noqa: S404
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 from unittest import mock
 
 import pytest
@@ -238,6 +238,18 @@ def test_contribution_guidelines(mock_url_ok, status, expected):
     assert (result.startswith('* [x]')) == expected
 
 
+@mock.patch('charmhub_listing_review.evaluate._url_ok')
+@pytest.mark.parametrize('status,expected', [(True, True), (False, False)])
+def test_coding_conventions(mock_url_ok, status, expected):
+    mock_url_ok.return_value = status
+    result = evaluate.coding_conventions('url')
+    assert (result.startswith('* [x]')) == expected
+    assert result.replace('* [x]', '* [ ]') == (
+        '* [ ] The quality assurance pipeline of a charm should be automated '
+        'using a continuous integration (CI) system.'
+    )
+
+
 @mock.patch('charmhub_listing_review.evaluate._fetch_url')
 @pytest.mark.parametrize('license_hash', sorted(evaluate._known_licenses))
 def test_license_statement_known_license(mock_fetch, license_hash):
@@ -257,6 +269,43 @@ def test_license_statement_fails(mock_fetch):
     mock_fetch.return_value = 'Some Unknown License'
     result = evaluate.license_statement('url')
     assert result.startswith('* [ ]')
+
+
+@mock.patch('charmhub_listing_review.evaluate._fetch_url')
+def test_license_statement_fetches_raw_content(mock_fetch):
+    """The GitHub web page for a file is HTML, so the license must be fetched raw."""
+    mock_fetch.return_value = None
+    evaluate.license_statement('https://github.com/canonical/my-charm/blob/main/LICENSE')
+    mock_fetch.assert_called_once_with(
+        'https://raw.githubusercontent.com/canonical/my-charm/main/LICENSE'
+    )
+
+
+@pytest.mark.parametrize(
+    'url,expected',
+    [
+        (
+            'https://github.com/canonical/my-charm/blob/main/LICENSE',
+            'https://raw.githubusercontent.com/canonical/my-charm/main/LICENSE',
+        ),
+        (
+            'https://github.com/canonical/my-charm/blob/26.04/charms/my-charm/LICENSE',
+            'https://raw.githubusercontent.com/canonical/my-charm/26.04/charms/my-charm/LICENSE',
+        ),
+        # Not a GitHub blob URL: left alone.
+        ('file:///home/charmer/my-charm/LICENSE', 'file:///home/charmer/my-charm/LICENSE'),
+        (
+            'https://raw.githubusercontent.com/canonical/my-charm/main/LICENSE',
+            'https://raw.githubusercontent.com/canonical/my-charm/main/LICENSE',
+        ),
+        (
+            'https://git.launchpad.net/my-charm/plain/LICENSE',
+            'https://git.launchpad.net/my-charm/plain/LICENSE',
+        ),
+    ],
+)
+def test_raw_content_url(url, expected):
+    assert evaluate._raw_content_url(url) == expected
 
 
 @mock.patch('charmhub_listing_review.evaluate._url_ok')
