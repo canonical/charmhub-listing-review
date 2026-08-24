@@ -28,11 +28,9 @@ execute: |
   # File-based checks should pass.
   echo "$output" | MATCH "✅.*icon"
 
-  # Lock file and requires-python are "Best practices" items fetched live from
-  # canonical/operator's best-practices.txt. They used to stay at manual review
-  # because the fetched text carried no id the matcher could key off; the :name:
-  # anchors from canonical/operator#2524 landed 2026-08-16 and this branch parses
-  # them, so both now resolve for real. A well-formed charm ticks them.
+  # Lock file and requires-python are "Best practices" items, checked against
+  # best-practices.txt fetched live from canonical/operator: these can fail
+  # because that file changed, not because this repo did.
   echo "$output" | MATCH "✅.*lock file" || echo "$output" | MATCH "✅.*committed to version control"
   echo "$output" | MATCH "✅.*requires-python"
 
