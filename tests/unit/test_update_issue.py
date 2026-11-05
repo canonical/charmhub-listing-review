@@ -20,6 +20,8 @@ import urllib.error
 from typing import cast
 from unittest import mock
 
+import yaml
+
 import charmhub_listing_review.evaluate as evaluate
 import charmhub_listing_review.update_issue as update_issue
 from charmhub_listing_review.evaluate import CheckResult, EvaluationResult
@@ -262,6 +264,43 @@ https://docs.example.com
     mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
     details = update_issue.get_details_from_issue(123)
     assert details['charm_dir'] == 'charms/my-charm'
+
+
+@mock.patch('charmhub_listing_review.update_issue.get_default_branch', return_value='main')
+@mock.patch('subprocess.run')
+def test_get_details_from_issue_with_blank_branch(mock_subprocess_run, mock_get_default_branch):
+    issue_body = """
+### Project Repository
+
+https://github.com/canonical/my-charm
+
+### Review Branch
+
+_No response_
+"""
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
+    details = update_issue.get_details_from_issue(123)
+    assert details['default_branch'] == 'main'
+    assert details['license_link'] == 'https://github.com/canonical/my-charm/blob/main/LICENSE'
+    mock_get_default_branch.assert_called_once_with('https://github.com/canonical/my-charm')
+
+
+@mock.patch('charmhub_listing_review.update_issue.get_default_branch')
+@mock.patch('subprocess.run')
+def test_get_details_from_issue_reads_every_template_field(
+    mock_subprocess_run, mock_get_default_branch
+):
+    template_path = (
+        pathlib.Path(__file__).parents[2] / '.github' / 'ISSUE_TEMPLATE' / 'listing-request.yml'
+    )
+    template = yaml.safe_load(template_path.read_text())
+    inputs = {item['id']: item['attributes']['label'] for item in template['body']}
+    # Render the issue the way that GitHub does, with a distinct value for each field.
+    issue_body = '\n\n'.join(f'### {label}\n\nvalue-{id_}' for id_, label in inputs.items())
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
+    details = update_issue.get_details_from_issue(123)
+    assert {f'value-{id_}' for id_ in inputs} <= set(details.values())
+    mock_get_default_branch.assert_not_called()
 
 
 def test_issue_summary():

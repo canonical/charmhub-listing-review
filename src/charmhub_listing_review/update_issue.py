@@ -194,12 +194,13 @@ def get_details_from_issue(issue_number: int, repo: str | None = None):
         match = re.search(pattern, body)
         if match:
             value = match.group(1).strip()
-            issue_data[key] = value
+            # GitHub fills in optional fields that are left blank with this placeholder.
+            issue_data[key] = None if value == '_No response_' else value
         else:
             issue_data[key] = None
 
     # Default charm_dir to '.' if not provided or empty.
-    if not issue_data.get('charm_dir') or issue_data['charm_dir'] == '_No response_':
+    if not issue_data.get('charm_dir'):
         issue_data['charm_dir'] = '.'
 
     # These have expected filenames, so we use those rather than require the author provide them.
