@@ -152,7 +152,7 @@ class _IssueData(TypedDict):
     ci_release_url: str
     ci_integration_url: str
     documentation_link: str
-    default_branch: str
+    review_branch: str
     contribution_link: str
     license_link: str
     security_link: str
@@ -186,7 +186,7 @@ def get_details_from_issue(issue_number: int, repo: str | None = None):
         'ci_integration_url': ('### CI Integration Tests',),
         'documentation_link': ('### Documentation Link',),
         # Requests filed before the field was relabelled use the old heading.
-        'default_branch': ('### Review Branch', '### Default Branch'),
+        'review_branch': ('### Review Branch', '### Default Branch'),
     }
 
     # Extract values for each field.
@@ -212,13 +212,13 @@ def get_details_from_issue(issue_number: int, repo: str | None = None):
     project_repo = issue_data['project_repo']
     if not project_repo:
         raise ValueError('Issue body is missing the "Project Repository" field.')
-    default_branch = issue_data.get('default_branch') or get_default_branch(str(project_repo))
-    issue_data['default_branch'] = default_branch
+    review_branch = issue_data.get('review_branch') or get_default_branch(str(project_repo))
+    issue_data['review_branch'] = review_branch
     issue_data['contribution_link'] = (
-        f'{issue_data["project_repo"]}/blob/{default_branch}/CONTRIBUTING.md'
+        f'{issue_data["project_repo"]}/blob/{review_branch}/CONTRIBUTING.md'
     )
-    issue_data['license_link'] = f'{issue_data["project_repo"]}/blob/{default_branch}/LICENSE'
-    issue_data['security_link'] = f'{issue_data["project_repo"]}/blob/{default_branch}/SECURITY.md'
+    issue_data['license_link'] = f'{issue_data["project_repo"]}/blob/{review_branch}/LICENSE'
+    issue_data['security_link'] = f'{issue_data["project_repo"]}/blob/{review_branch}/SECURITY.md'
 
     return cast('_IssueData', issue_data)
 
@@ -361,7 +361,7 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
         issue_data['contribution_link'],
         issue_data['license_link'],
         issue_data['security_link'],
-        issue_data['default_branch'],
+        issue_data['review_branch'],
         charm_dir=issue_data.get('charm_dir', '.'),
     )
     passed_ids = {r.checklist_id for r in evaluation.checks if r.checklist_id and r.passed is True}

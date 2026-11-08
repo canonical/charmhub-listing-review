@@ -103,7 +103,7 @@ def print_self_review_results(
     comment = comment.replace('are also\nrequired for listing.', 'are also required for listing.')
 
     if project_repo:
-        default_branch = branch or get_default_branch(project_repo)
+        review_branch = branch or get_default_branch(project_repo)
         if project_repo.startswith('file://'):
             charm_subdir = '' if charm_dir in ('', '.') else f'/{charm_dir.strip("/")}'
             base = f'{project_repo.rstrip("/")}{charm_subdir}'
@@ -112,9 +112,9 @@ def print_self_review_results(
             security_url = f'{base}/SECURITY.md'
         else:
             # Like update-issue, this assumes it's GitHub for now.
-            contribution_url = f'{project_repo}/blob/{default_branch}/CONTRIBUTING.md'
-            license_url = f'{project_repo}/blob/{default_branch}/LICENSE'
-            security_url = f'{project_repo}/blob/{default_branch}/SECURITY.md'
+            contribution_url = f'{project_repo}/blob/{review_branch}/CONTRIBUTING.md'
+            license_url = f'{project_repo}/blob/{review_branch}/LICENSE'
+            security_url = f'{project_repo}/blob/{review_branch}/SECURITY.md'
 
         try:
             evaluation = evaluate(
@@ -124,7 +124,7 @@ def print_self_review_results(
                 contribution_url,
                 license_url,
                 security_url,
-                default_branch,
+                review_branch,
                 charm_dir=charm_dir,
             )
 
