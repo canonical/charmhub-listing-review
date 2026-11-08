@@ -326,7 +326,22 @@ def test_get_details_from_issue_reads_every_template_field(
     issue_body = '\n\n'.join(f'### {label}\n\nvalue-{id_}' for id_, label in inputs.items())
     mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
     details = update_issue.get_details_from_issue(123)
-    assert {f'value-{id_}' for id_ in inputs} <= set(details.values())
+    # This deliberately repeats the mapping in get_details_from_issue, so that a heading read
+    # into the wrong key fails here.
+    expected_keys = {
+        'Name': 'name',
+        'Demo': 'demo_url',
+        'Repository-Link': 'project_repo',
+        'Charm-Directory': 'charm_dir',
+        'CI-Linting': 'ci_linting',
+        'CI-Release': 'ci_release_url',
+        'CI-Integration': 'ci_integration_url',
+        'Documentation-Link': 'documentation_link',
+        'Review-Branch': 'review_branch',
+    }
+    assert inputs.keys() == expected_keys.keys()
+    for id_, key in expected_keys.items():
+        assert details[key] == f'value-{id_}'
     mock_get_default_branch.assert_not_called()
 
 
