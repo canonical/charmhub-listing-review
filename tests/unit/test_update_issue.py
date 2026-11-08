@@ -234,6 +234,28 @@ https://docs.example.com
     mock_get_default_branch.assert_not_called()
 
 
+@mock.patch('charmhub_listing_review.update_issue.get_default_branch')
+@mock.patch('subprocess.run')
+def test_get_details_from_issue_with_old_branch_heading(
+    mock_subprocess_run, mock_get_default_branch
+):
+    issue_body = """
+### Charm name
+my-charm
+
+### Project Repository
+https://github.com/canonical/my-charm
+
+### Default Branch
+
+26.04
+"""
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
+    details = update_issue.get_details_from_issue(123)
+    assert details['default_branch'] == '26.04'
+    mock_get_default_branch.assert_not_called()
+
+
 @mock.patch('subprocess.run')
 def test_get_details_from_issue_with_charm_dir(mock_subprocess_run):
     issue_body = """
