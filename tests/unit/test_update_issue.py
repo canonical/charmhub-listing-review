@@ -181,7 +181,7 @@ https://docs.example.com
     assert details['ci_release_url'] == 'https://ci.example.com/release'
     assert details['ci_integration_url'] == 'https://ci.example.com/integration'
     assert details['documentation_link'] == 'https://docs.example.com'
-    assert details['default_branch'] == 'main'
+    assert details['review_branch'] == 'main'
     assert (
         details['contribution_link']
         == 'https://github.com/canonical/my-charm/blob/main/CONTRIBUTING.md'
@@ -223,7 +223,7 @@ https://docs.example.com
 """
     mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
     details = update_issue.get_details_from_issue(123)
-    assert details['default_branch'] == '26.04'
+    assert details['review_branch'] == '26.04'
     assert (
         details['contribution_link']
         == 'https://github.com/canonical/my-charm/blob/26.04/CONTRIBUTING.md'
@@ -253,7 +253,7 @@ https://github.com/canonical/my-charm
 """
     mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
     details = update_issue.get_details_from_issue(123)
-    assert details['default_branch'] == '26.04'
+    assert details['review_branch'] == '26.04'
     mock_get_default_branch.assert_not_called()
 
 
@@ -414,7 +414,7 @@ _No response_
 """
     mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
     details = update_issue.get_details_from_issue(123)
-    assert details['default_branch'] == 'main'
+    assert details['review_branch'] == 'main'
     assert details['license_link'] == 'https://github.com/canonical/my-charm/blob/main/LICENSE'
     mock_get_default_branch.assert_called_once_with('https://github.com/canonical/my-charm')
 
@@ -455,7 +455,7 @@ def _make_issue_data(**overrides):
         'contribution_link': 'https://github.com/canonical/my-charm/blob/main/CONTRIBUTING.md',
         'license_link': 'https://github.com/canonical/my-charm/blob/main/LICENSE',
         'security_link': 'https://github.com/canonical/my-charm/blob/main/SECURITY.md',
-        'default_branch': 'main',
+        'review_branch': 'main',
         'charm_dir': '.',
     }
     defaults.update(overrides)
@@ -658,7 +658,7 @@ def test_apply_automated_checks_ticks_orphaned_checks(mock_evaluate):
         'contribution_link': 'https://github.com/org/my-charm/blob/main/CONTRIBUTING.md',
         'license_link': 'https://github.com/org/my-charm/blob/main/LICENSE',
         'security_link': 'https://github.com/org/my-charm/blob/main/SECURITY.md',
-        'default_branch': 'main',
+        'review_branch': 'main',
         'charm_dir': '.',
     }
     result = update_issue.apply_automated_checks(
