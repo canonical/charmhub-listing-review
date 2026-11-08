@@ -316,7 +316,12 @@ def test_get_details_from_issue_reads_every_template_field(
         pathlib.Path(__file__).parents[2] / '.github' / 'ISSUE_TEMPLATE' / 'listing-request.yml'
     )
     template = yaml.safe_load(template_path.read_text())
-    inputs = {item['id']: item['attributes']['label'] for item in template['body']}
+    # Markdown blocks are only shown on the form, and don't appear in the issue.
+    inputs = {
+        item['id']: item['attributes']['label']
+        for item in template['body']
+        if item['type'] != 'markdown'
+    }
     # Render the issue the way that GitHub does, with a distinct value for each field.
     issue_body = '\n\n'.join(f'### {label}\n\nvalue-{id_}' for id_, label in inputs.items())
     mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
