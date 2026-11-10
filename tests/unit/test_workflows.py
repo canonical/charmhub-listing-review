@@ -82,6 +82,10 @@ class TestDefaultBranchPush:
             ("push:\n    branches: ['**', '!main']", False),
             ("push:\n    branches: ['**', '!feature/*']", True),
             ("push:\n    branches: ['!main']", False),
+            # The last matching pattern wins, so a later positive one puts
+            # an excluded branch back.
+            ("push:\n    branches: ['**', '!main', 'main']", True),
+            ("push:\n    branches: ['main', '!ma*']", False),
         ],
     )
     def test_branch_filters(self, tmp_path: pathlib.Path, push_block: str, expected: bool):

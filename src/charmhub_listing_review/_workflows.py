@@ -186,17 +186,22 @@ def _as_list(value: Any) -> list[str]:
 def _branches_cover(patterns: list[str], branch: str) -> bool:
     """Does a ``branches:`` list fire for *branch*?
 
-    GitHub evaluates positive patterns first and then lets a ``!`` pattern
-    take a branch back out again, so ``['**', '!main']`` is the ordinary way
-    to write "every branch except the default one". Matching the whole list
-    positionally instead reads that as a match on `main`, which is a tick for
-    a workflow that GitHub never runs there.
+    GitHub reads the list in order and the last pattern that matches wins: a
+    ``!`` pattern takes a branch back out, and a later positive pattern puts
+    it back in. So ``['**', '!main']`` is the ordinary way to write "every
+    branch except the default one", and ``['**', '!main', 'main']`` does run
+    on `main`. Treating ``!`` as an ordinary character instead reads the first
+    as a match on `main`, which is a tick for a workflow that GitHub never
+    runs there.
     """
-    positive = [pattern for pattern in patterns if not pattern.startswith('!')]
-    negative = [pattern[1:] for pattern in patterns if pattern.startswith('!')]
-    if not any(_branch_matches(pattern, branch) for pattern in positive):
-        return False
-    return not any(_branch_matches(pattern, branch) for pattern in negative)
+    covered = False
+    for pattern in patterns:
+        if pattern.startswith('!'):
+            if _branch_matches(pattern[1:], branch):
+                covered = False
+        elif _branch_matches(pattern, branch):
+            covered = True
+    return covered
 
 
 def _branch_matches(pattern: str, branch: str) -> bool:
