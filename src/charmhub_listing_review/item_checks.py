@@ -144,7 +144,7 @@ class CharmSource:
             return {}
         try:
             data = yaml.safe_load(path.read_text(encoding='utf-8', errors='replace'))
-        except yaml.YAMLError:
+        except (yaml.YAMLError, OSError):
             return {}
         return data if isinstance(data, dict) else {}
 

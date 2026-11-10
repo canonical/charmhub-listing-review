@@ -69,6 +69,19 @@ class TestFirstPartyPythonFiles:
         assert found == ['src/charm.py']
 
 
+class TestCharmcraftYaml:
+    def test_unreadable_file_is_empty(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        (tmp_path / 'charmcraft.yaml').write_text('name: my-charm\n')
+
+        def fail(*args: object, **kwargs: object) -> str:
+            raise PermissionError('Permission denied')
+
+        monkeypatch.setattr(pathlib.Path, 'read_text', fail)
+        assert CharmSource(charm_path=tmp_path).charmcraft_yaml() == {}
+
+
 class TestUnreadInputsCapTheVerdict:
     """An item cannot be settled by evidence it could not read."""
 
