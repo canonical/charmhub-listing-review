@@ -1037,6 +1037,24 @@ class TestPinWorkloadVersionsMachine:
             ),
             ("subprocess.run(['pip', 'install', 'requests'])", Verdict.FAIL),
             ("subprocess.run(['pip', 'install', 'requests==2.31.0'])", Verdict.PASS),
+            # A requirements file may well pin; whether it does is in the file.
+            ("subprocess.run(['pip', 'install', '-r', 'requirements.txt'])", Verdict.NEEDS_HUMAN),
+            (
+                "subprocess.run(['pip', 'install', '--requirement=requirements.txt'])",
+                Verdict.NEEDS_HUMAN,
+            ),
+            ("subprocess.run(['pip', 'install', '-rrequirements.txt'])", Verdict.NEEDS_HUMAN),
+            (
+                "subprocess.run(['pip', 'install', '-r', 'requirements.txt', 'requests'])",
+                Verdict.FAIL,
+            ),
+            # A local path installs what the charm ships.
+            ("subprocess.run(['pip', 'install', '.'])", Verdict.NOT_APPLICABLE),
+            ("subprocess.run(['pip', 'install', '-e', '.'])", Verdict.NOT_APPLICABLE),
+            (
+                "subprocess.run(['apt-get', 'install', '-y', './workload.deb'])",
+                Verdict.NOT_APPLICABLE,
+            ),
             (
                 "subprocess.run(['curl', '-LO', 'https://example.com/foo/latest/foo.tar.gz'])",
                 Verdict.FAIL,

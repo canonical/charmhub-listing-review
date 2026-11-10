@@ -1503,6 +1503,31 @@ class _InstallSite:
     detail: str
 
 
+def _split_requirement_files(arguments: list[str]) -> tuple[list[str], list[str]]:
+    """Separate pip's ``-r``/``--requirement`` files from the other arguments."""
+    remaining: list[str] = []
+    files: list[str] = []
+    expecting_file = False
+    for argument in arguments:
+        if expecting_file:
+            files.append(argument)
+            expecting_file = False
+        elif argument in ('-r', '--requirement'):
+            expecting_file = True
+        elif argument.startswith('--requirement='):
+            files.append(argument.partition('=')[2])
+        elif argument.startswith('-r') and len(argument) > 2:
+            files.append(argument[2:])
+        else:
+            remaining.append(argument)
+    return remaining, files
+
+
+def _is_local_path(argument: str) -> bool:
+    """Whether an install argument is a path rather than a package name."""
+    return argument in ('.', '..') or argument.startswith(('./', '../', '/'))
+
+
 def _literal_tokens(node: ast.expr | None) -> list[str] | None:
     """A command's argv as a list of strings, only if every element is literal."""
     if isinstance(node, (ast.List, ast.Tuple)):
@@ -1689,7 +1714,25 @@ class _InstallVisitor(ast.NodeVisitor):
     ) -> None:
         if 'install' not in tokens:
             return
-        packages = [t for t in tokens[tokens.index('install') + 1 :] if not t.startswith('-')]
+        arguments = tokens[tokens.index('install') + 1 :]
+        if program in ('pip', 'pip3'):
+            arguments, requirement_files = _split_requirement_files(arguments)
+            # A requirements file is how a Python dependency set is normally
+            # pinned, and whether it pins is in the file, not the command.
+            for requirement_file in requirement_files:
+                self.sites.append(
+                    _InstallSite(
+                        location=self._location(node),
+                        pinned=None,
+                        detail=(
+                            f'{program} install -r {requirement_file}: whether the '
+                            f'requirements file pins every package needs it read'
+                        ),
+                    )
+                )
+        # A local path (`pip install .`, `apt install ./x.deb`) installs what
+        # the charm ships, not a version picked from an index.
+        packages = [t for t in arguments if not t.startswith('-') and not _is_local_path(t)]
         if not packages:
             return
         unpinned = [p for p in packages if separator not in p]
