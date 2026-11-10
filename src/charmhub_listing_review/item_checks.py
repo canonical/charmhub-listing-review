@@ -323,6 +323,19 @@ def _is_name(node: ast.AST, name: str) -> bool:
     return isinstance(node, ast.Name) and node.id == name
 
 
+def _passes_snap_state(node: ast.Call) -> bool:
+    """Whether a call's state argument is a ``SnapState`` member."""
+    arguments = [*node.args[:1], *(kw.value for kw in node.keywords if kw.arg == 'state')]
+    for argument in arguments:
+        if isinstance(argument, ast.Attribute):
+            owner = argument.value
+            if _is_name(owner, 'SnapState') or (
+                isinstance(owner, ast.Attribute) and owner.attr == 'SnapState'
+            ):
+                return True
+    return False
+
+
 def _check_argv(site: _ExecSite, argv: ast.AST | None) -> None:
     """Check the command argument for shell strings and relative paths."""
     if argv is None:
@@ -1572,26 +1585,48 @@ class _InstallVisitor(ast.NodeVisitor):
     def __init__(self, relative_path: str):
         self._path = relative_path
         self.sites: list[_InstallSite] = []
+        # Local names bound by `from charms.<lib>.apt import add_package` (or
+        # the snap library's `add`/`ensure`), so a bare call is still matched.
+        self._apt_functions: set[str] = set()
+        self._snap_functions: dict[str, str] = {}
 
     def _location(self, node: ast.AST) -> str:
         return f'{self._path}:{getattr(node, "lineno", 0)}'
 
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        module = (node.module or '').rsplit('.', 1)[-1]
+        for alias in node.names:
+            local = alias.asname or alias.name
+            if module == 'apt' and alias.name in _APT_LIB_FUNCTIONS:
+                self._apt_functions.add(local)
+            elif module == 'snap' and alias.name in ('add', 'ensure'):
+                self._snap_functions[local] = alias.name
+        self.generic_visit(node)
+
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
-        if isinstance(func, ast.Attribute):
+        if isinstance(func, ast.Name):
+            if func.id in self._apt_functions:
+                self._add_apt_lib_site(node)
+            elif func.id in self._snap_functions:
+                self._add_snap_site(node, f'snap.{self._snap_functions[func.id]}')
+        elif isinstance(func, ast.Attribute):
             if _is_name(func.value, 'apt') and func.attr in _APT_LIB_FUNCTIONS:
                 self._add_apt_lib_site(node)
             elif _is_name(func.value, 'snap') and func.attr in ('add', 'ensure'):
                 self._add_snap_site(node, f'snap.{func.attr}')
-            elif func.attr == 'ensure' and {kw.arg for kw in node.keywords} & {
-                'channel',
-                'revision',
-            }:
+            elif func.attr == 'ensure' and (
+                {kw.arg for kw in node.keywords} & {'channel', 'revision'}
+                or _passes_snap_state(node)
+            ):
                 # The receiver's name varies too much to match on (a `Snap` from
                 # `SnapCache()[name]`, a local, `self._snap`, ...), the same
                 # problem `container.exec()` has in the safe-subprocess check.
-                # Requiring a `channel`/`revision` keyword is the guard that
-                # keeps an unrelated `.ensure()` method from matching.
+                # A `channel`/`revision` keyword or a `SnapState` argument is
+                # the guard that keeps an unrelated `.ensure()` method from
+                # matching. The `SnapState` half matters: without it the one
+                # shape dropped would be the floating one,
+                # `snap_package.ensure(SnapState.Latest)`.
                 self._add_snap_site(node, '.ensure()')
             elif (_is_name(func.value, 'subprocess') and func.attr in _SUBPROCESS_FUNCTIONS) or (
                 _is_name(func.value, 'os') and func.attr == 'system'
@@ -1788,7 +1823,7 @@ class _InstallVisitor(ast.NodeVisitor):
         # `curl -o <path> <url>` puts the output path first, so prefer whatever
         # looks like a URL over the first bare argument.
         url = next((t for t in arguments if '://' in t), arguments[0])
-        if 'latest' in pathlib.PurePosixPath(url).as_posix().lower():
+        if 'latest' in url.lower():
             self.sites.append(
                 _InstallSite(
                     location=self._location(node),

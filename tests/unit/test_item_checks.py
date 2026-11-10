@@ -1053,6 +1053,55 @@ class TestPinWorkloadVersionsMachine:
         assert assessment.verdict is Verdict.FAIL
         assert 'channel' in assessment.rationale or 'do not pin' in assessment.rationale
 
+    @pytest.mark.parametrize(
+        'call',
+        [
+            'snap_package.ensure(SnapState.Latest)',
+            'snap_package.ensure(snap.SnapState.Present)',
+            'snap_package.ensure(state=SnapState.Latest)',
+        ],
+    )
+    def test_snap_ensure_with_only_a_state_is_floating(self, tmp_path: pathlib.Path, call: str):
+        assessment = pin_workload_versions.assess(
+            _source(tmp_path, **{'src/charm.py': f'{call}\n'})
+        )
+        assert assessment.verdict is Verdict.FAIL
+
+    @pytest.mark.parametrize(
+        'source,expected',
+        [
+            (
+                'from charms.operator_libs_linux.v0.apt import add_package\n'
+                "add_package('nginx')\n",
+                Verdict.FAIL,
+            ),
+            (
+                'from charms.operator_libs_linux.v0.apt import add_package as install\n'
+                "install('nginx', version='1.18.0')\n",
+                Verdict.PASS,
+            ),
+            (
+                'from charms.operator_libs_linux.v2.snap import add\n'
+                "add('charmcraft', revision='1234')\n",
+                Verdict.PASS,
+            ),
+            (
+                "from charms.operator_libs_linux.v2.snap import add\nadd('charmcraft')\n",
+                Verdict.FAIL,
+            ),
+        ],
+    )
+    def test_library_functions_imported_by_name(
+        self, tmp_path: pathlib.Path, source: str, expected: Verdict
+    ):
+        assessment = pin_workload_versions.assess(_source(tmp_path, **{'src/charm.py': source}))
+        assert assessment.verdict is expected
+
+    def test_add_from_some_other_module_is_not_a_snap_install(self, tmp_path: pathlib.Path):
+        source = 'from operator import add\nadd(1, 2)\n'
+        assessment = pin_workload_versions.assess(_source(tmp_path, **{'src/charm.py': source}))
+        assert assessment.verdict is Verdict.NOT_APPLICABLE
+
     def test_unrelated_ensure_call_not_mistaken_for_snap_install(self, tmp_path: pathlib.Path):
         """A bare ``.ensure()`` with no channel/revision keyword is too generic to match."""
         assessment = pin_workload_versions.assess(
