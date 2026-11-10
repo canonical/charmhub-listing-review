@@ -67,7 +67,19 @@ from ._models import ItemAssessment, Verdict
 _LIB_CHARMS = ('lib', 'charms')
 
 # Directories whose contents are not the charm's runtime behaviour.
-_EXCLUDED_DIRS = frozenset({'tests', 'test', '.git', '.tox', 'venv', '.venv', 'build'})
+_EXCLUDED_DIRS = frozenset({
+    'tests',
+    'test',
+    '.git',
+    '.tox',
+    'venv',
+    '.venv',
+    'site-packages',
+    'node_modules',
+    'build',
+    'dist',
+    '.eggs',
+})
 
 
 def first_party_python_files(

@@ -68,6 +68,22 @@ class TestFirstPartyPythonFiles:
         found = [p.relative_to(charm).as_posix() for p in first_party_python_files(charm)]
         assert found == ['src/charm.py']
 
+    @pytest.mark.parametrize(
+        'excluded',
+        [
+            '.venv/lib/python3.12/site-packages/pkg/mod.py',
+            'env/lib/python3.12/site-packages/pkg/mod.py',
+            'node_modules/pkg/mod.py',
+            'build/lib/mod.py',
+            'dist/mod.py',
+            '.eggs/pkg/mod.py',
+        ],
+    )
+    def test_excludes_environments_and_build_output(self, tmp_path: pathlib.Path, excluded: str):
+        charm = _charm(tmp_path, **{'src/charm.py': '', excluded: ''})
+        found = [p.relative_to(charm).as_posix() for p in first_party_python_files(charm)]
+        assert found == ['src/charm.py']
+
 
 class TestCharmcraftYaml:
     def test_unreadable_file_is_empty(
