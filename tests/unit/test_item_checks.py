@@ -189,6 +189,21 @@ class TestSafeSubprocess:
         assert any("kept in 'proc'" in line for line in assessment.evidence)
 
     @pytest.mark.parametrize(
+        'command',
+        [
+            "['/usr/bin/sudo', '-u', 'git', '/bin/bash', '-c', cmd]",
+            "['/usr/bin/env', 'bash', '-c', cmd]",
+        ],
+    )
+    def test_shell_behind_sudo_or_env_is_caught(self, tmp_path: pathlib.Path, command: str):
+        assessment = _assess(
+            tmp_path,
+            **{'src/charm.py': f'import ops\noutput, _ = c.exec({command}).wait_output()\n'},
+        )
+        assert assessment.verdict is Verdict.FAIL
+        assert any('so the shell interprets it' in line for line in assessment.evidence)
+
+    @pytest.mark.parametrize(
         'command,expected',
         [
             ("'chown git /data'", 'as a string rather than a list'),

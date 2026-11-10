@@ -241,8 +241,11 @@ def _is_os_runner(name: str) -> bool:
     return name in _OS_RUNNERS or name.startswith(_OS_RUNNER_PREFIXES)
 
 
-# Programs that take a command *string* and hand it to a shell, so that passing
-# a list to exec() still ends up shell-interpreted.
+# Programs that can end up handing a command string to a shell, so that passing
+# a list to exec() is still shell-interpreted if a `-c` follows. The shells and
+# `su` take `-c` themselves. `sudo` and `env` don't, but run whatever comes
+# next, as in `['sudo', 'bash', '-c', cmd]`, and only the first element is
+# matched against this set.
 _SHELL_WRAPPERS = frozenset({'sh', 'bash', 'dash', 'zsh', 'su', 'sudo', 'env'})
 
 
