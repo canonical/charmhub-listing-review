@@ -435,7 +435,7 @@ def _check_argv(site: _ExecSite, argv: ast.AST | None) -> None:
     # Container.exec wants a list; a bare string is simply wrong.
     if isinstance(argv, ast.Constant) and isinstance(argv.value, str):
         site.problems.append('passes the command as a string rather than a list')
-        _check_program(site, argv.value.split()[0] if argv.value.split() else '')
+        _check_program(site, (argv.value.split() or [''])[0])
         return
     if isinstance(argv, ast.JoinedStr):
         site.problems.append('builds the command as an f-string rather than a list')
