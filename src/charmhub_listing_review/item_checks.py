@@ -1402,8 +1402,10 @@ avoid_charm_plugin = ItemCheck(
 # written for a machine charm: install the workload with `apt`/`snap`/`pip`,
 # and pin the version rather than taking whatever is newest. That framing
 # does not survive contact with a Kubernetes charm, whose workload arrives as
-# an OCI image rather than an installed package - see
-# AI-ITEM-VALIDATION.md's "Item 16 is framed for machine charms" section.
+# an OCI image rather than an installed package, so there is no install call
+# to pin. Read literally, the item would find nothing to check in a
+# Kubernetes charm, however its image is referenced. The thing to pin there is
+# the image: a tag or digest rather than `latest` or no tag.
 # This check decides which kind of charm it is looking at, then applies the
 # rule that actually applies:
 #
@@ -1480,9 +1482,9 @@ def _oci_image_resources(resources: dict[str, Any]) -> list[_OciResource]:
 # Package managers and downloaders whose CLI form this check recognises. The
 # Python-library forms (`apt.add_package`, `snap.add`, a `SnapCache` entry's
 # `.ensure()`) are matched separately in `_InstallVisitor`, since a charm can
-# use either shape - `AI-ITEM-VALIDATION.md`'s real charms use only the
-# library forms, but the checklist item's own wording ("snap install
-# --channel=stable", "apt install foo") is CLI-shaped.
+# use either shape. The library forms are the usual way in charms, but the
+# checklist item's own wording ("snap install --channel=stable", "apt install
+# foo") is CLI-shaped.
 _CLI_INSTALL_PROGRAMS = frozenset({'apt', 'apt-get', 'snap', 'pip', 'pip3'})
 _CLI_DOWNLOAD_PROGRAMS = frozenset({'curl', 'wget'})
 
