@@ -1096,7 +1096,10 @@ integration_tests = ItemCheck(
 # Model configuration keys, from
 # https://canonical.com/juju/docs/juju-cli/3.6/reference/configuration/list-of-model-configuration-keys
 # read 2026-07-28 against Juju 3.6. Juju adds keys occasionally; a key missing
-# from this list makes the check miss a duplicate, never invent one.
+# from this list makes the check miss a duplicate, never invent one. The
+# version goes into the item's evidence so the reviewer sees how old the list
+# is, rather than only someone reading this file.
+MODEL_CONFIG_KEYS_VERSION = 'Juju 3.6'
 MODEL_CONFIG_KEYS = frozenset({
     'agent-metadata-url',
     'agent-stream',
@@ -1187,11 +1190,17 @@ def gather_config_options(source: CharmSource) -> Evidence:
         others.append(f'{name}: {description}' if description else str(name))
 
     lines = [
-        f'{name}: duplicates the `{key}` model configuration key'
+        f'{name}: has the same name as the `{key}` model configuration key'
         for name, key in sorted(duplicates)
     ]
+    lines = list(lines or others)
+    if options:
+        lines.append(
+            f'Model configuration keys are from {MODEL_CONFIG_KEYS_VERSION}, so a key added '
+            f'since then is not matched.'
+        )
     return Evidence(
-        lines=lines or others,
+        lines=lines,
         data={'duplicates': duplicates, 'others': others, 'option_count': len(options)},
         unread=unread,
     )
@@ -1216,8 +1225,10 @@ def decide_no_duplicate_model_config(evidence: Evidence) -> ItemAssessment:
             checklist_id=checklist_id,
             verdict=Verdict.FAIL,
             rationale=(
-                f'{len(duplicates)} configuration option(s) duplicate a `juju model-config` '
-                f'key: {names}.'
+                f'{len(duplicates)} configuration option(s) have the same name as a '
+                f'`juju model-config` key: {names}. The name may simply be taken, but the '
+                f'item asks for the model-level setting to be used rather than a charm '
+                f'option with its name.'
             ),
             evidence=evidence.lines,
         )

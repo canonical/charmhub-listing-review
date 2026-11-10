@@ -790,7 +790,18 @@ class TestNoDuplicateModelConfig:
             _source(tmp_path, **{'charmcraft.yaml': charmcraft})
         )
         assert assessment.verdict is Verdict.NEEDS_HUMAN
-        assert assessment.evidence == ['port: The port to listen on.']
+        assert assessment.evidence[0] == 'port: The port to listen on.'
+
+    def test_evidence_says_which_juju_the_keys_came_from(self, tmp_path: pathlib.Path):
+        charmcraft = 'name: my-charm\nconfig:\n  options:\n    port:\n      type: int\n'
+        assessment = no_duplicate_model_config.assess(
+            _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        )
+        assert any('are from Juju 3.6' in line for line in assessment.evidence)
+        evidence = no_duplicate_model_config.gather(
+            _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        )
+        assert evidence.data['others'] == ['port']
 
     def test_legacy_config_yaml_is_read(self, tmp_path: pathlib.Path):
         assessment = no_duplicate_model_config.assess(
