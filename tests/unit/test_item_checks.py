@@ -743,6 +743,12 @@ jobs:
         )
         assert assessment.verdict is not Verdict.FAIL
 
+    def test_test_files_are_relative_to_the_charm(self, tmp_path: pathlib.Path):
+        evidence = integration_tests.gather(
+            _source(tmp_path, **{'tests/integration/test_charm.py': 'def test_deploy(): ...\n'})
+        )
+        assert evidence.data['test_files'] == ['tests/integration/test_charm.py']
+
     def test_a_suite_the_walk_cannot_see_is_not_an_absent_suite(self, tmp_path: pathlib.Path):
         """A workflow running a suite is evidence it exists, whatever the layout."""
         assessment = integration_tests.assess(

@@ -922,7 +922,7 @@ def gather_integration_tests(source: CharmSource) -> Evidence:
         unread=([f'{path}: could not be parsed as YAML' for path in unreadable] + unread_tests),
         data={
             'running': running,
-            'test_files': [str(path) for path in test_files],
+            'test_files': [path.relative_to(source.charm_path).as_posix() for path in test_files],
             'endpoints': endpoints,
             'covered': covered,
             'uncovered': uncovered,
