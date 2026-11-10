@@ -80,8 +80,8 @@ class TestFirstPartyPythonFiles:
 class TestSafeSubprocess:
     """Item 17, the half ruff cannot see: ``ops.Container.exec``.
 
-    The ``subprocess`` half is ruff's (S602/S604/S605/S607, PLW1510), so
-    there are no tests for it here.
+    The ``subprocess`` half is ruff's (S602/S604/S605/S607, PLW1510), so the
+    tests here only check that using it stops this check settling the item.
     """
 
     def test_no_commands_is_not_applicable(self, tmp_path: pathlib.Path):
@@ -90,12 +90,40 @@ class TestSafeSubprocess:
         assert assessment.verdict is Verdict.NOT_APPLICABLE
         assert not assessment.evidence
 
-    def test_subprocess_is_left_to_ruff(self, tmp_path: pathlib.Path):
-        """A `subprocess` call is not this check's business, however bad it is."""
-        assessment = _assess(
-            tmp_path,
-            **{'src/charm.py': "import subprocess\nsubprocess.run('apt update', shell=True)\n"},
+    @pytest.mark.parametrize(
+        'source',
+        [
+            "import subprocess\nsubprocess.run('apt update', shell=True)\n",
+            "from subprocess import check_output\ncheck_output('apt update', shell=True)\n",
+            "import subprocess as sp\nsp.run('apt update', shell=True)\n",
+            "import os\nos.system('apt update')\n",
+            "from os import popen\npopen('apt update')\n",
+            "import os\nos.execv('/usr/bin/id', ['id'])\n",
+        ],
+    )
+    def test_subprocess_is_left_to_ruff(self, tmp_path: pathlib.Path, source: str):
+        """The subprocess half is ruff's, so this check can't settle the item.
+
+        It must not say the item doesn't apply either: the charm does run
+        commands.
+        """
+        assessment = _assess(tmp_path, **{'src/charm.py': source})
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert any('which ruff checks' in line for line in assessment.evidence)
+
+    def test_clean_container_exec_plus_subprocess_is_not_a_pass(self, tmp_path: pathlib.Path):
+        source = (
+            'import subprocess\n'
+            "subprocess.run(['/usr/bin/id'], check=True)\n"
+            "out, _ = container.exec(['/usr/bin/id']).wait_output()\n"
         )
+        assessment = _assess(tmp_path, **{'src/charm.py': source})
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert 'Container.exec call(s) are fine' in assessment.rationale
+
+    def test_unrelated_os_use_is_not_applicable(self, tmp_path: pathlib.Path):
+        source = "import os\nos.environ.get('JUJU_VERSION')\nos.path.join('a', 'b')\n"
+        assessment = _assess(tmp_path, **{'src/charm.py': source})
         assert assessment.verdict is Verdict.NOT_APPLICABLE
 
     def test_container_exec_is_checked(self, tmp_path: pathlib.Path):

@@ -222,9 +222,24 @@ class ItemCheck:
 # everything through Pebble, so a charm can contain no `subprocess` call at
 # all and still run commands throughout.
 #
+# A charm that does use subprocess or os to run commands gets NEEDS_HUMAN
+# rather than NOT_APPLICABLE or PASS, because the item covers those commands
+# too and this check hasn't looked at them.
+#
 # Known gap: `subprocess.run` without `capture_output=` has no ruff rule
 # either, and is not checked anywhere now. It wants a charmlint rule, or a
 # ruff one upstream.
+
+# `os` functions that start a process. Like `subprocess`, they are ruff's to
+# check (S605-S607), but a charm that uses them does run commands, so this
+# check cannot call the item not applicable.
+_OS_RUNNERS = frozenset({'system', 'popen'})
+_OS_RUNNER_PREFIXES = ('exec', 'spawn', 'posix_spawn')
+
+
+def _is_os_runner(name: str) -> bool:
+    return name in _OS_RUNNERS or name.startswith(_OS_RUNNER_PREFIXES)
+
 
 # Programs that take a command *string* and hand it to a shell, so that passing
 # a list to exec() still ends up shell-interpreted.
@@ -261,6 +276,8 @@ class _ExecVisitor(ast.NodeVisitor):
         self._scopes: list[dict[str, ast.expr]] = []
         # The statements of each enclosing scope, innermost last.
         self._bodies: list[list[ast.stmt]] = []
+        # Where the charm runs commands some other way than Container.exec.
+        self.elsewhere: list[str] = []
 
     def visit_Module(self, node: ast.Module) -> None:
         self._visit_scope(node, node.body)
@@ -309,6 +326,25 @@ class _ExecVisitor(ast.NodeVisitor):
             if node.id in scope:
                 return scope[node.id]
         return node
+
+    def visit_Import(self, node: ast.Import) -> None:
+        if any(alias.name.split('.')[0] == 'subprocess' for alias in node.names):
+            self.elsewhere.append(f'{self._location(node)}: imports subprocess')
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if node.module == 'subprocess':
+            self.elsewhere.append(f'{self._location(node)}: imports from subprocess')
+        elif node.module == 'os':
+            for alias in node.names:
+                if _is_os_runner(alias.name):
+                    self.elsewhere.append(f'{self._location(node)}: imports os.{alias.name}')
+        self.generic_visit(node)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if isinstance(node.value, ast.Name) and node.value.id == 'os' and _is_os_runner(node.attr):
+            self.elsewhere.append(f'{self._location(node)}: uses os.{node.attr}')
+        self.generic_visit(node)
 
     def visit_Expr(self, node: ast.Expr) -> None:
         if isinstance(node.value, ast.Call):
@@ -439,6 +475,7 @@ def gather_exec_sites(source: CharmSource) -> Evidence:
     """Collect every place the charm runs a command in its workload."""
     charm_path = source.charm_path
     sites: list[_ExecSite] = []
+    elsewhere: list[str] = []
     unparsed: list[str] = []
     for path in first_party_python_files(charm_path, source.charm_name):
         relative = path.relative_to(charm_path).as_posix()
@@ -450,15 +487,17 @@ def gather_exec_sites(source: CharmSource) -> Evidence:
         visitor = _ExecVisitor(relative)
         visitor.visit(tree)
         sites.extend(visitor.sites)
+        elsewhere.extend(visitor.elsewhere)
 
     lines: list[str] = []
     for site in sites:
         lines.extend(f'{site.location}: {problem}' for problem in site.problems)
         if site.undecidable:
             lines.append(f'{site.location}: could not rule on this call - {site.undecidable}')
+    lines.extend(f'{line}, which ruff checks rather than this item check' for line in elsewhere)
     return Evidence(
         lines=lines,
-        data={'sites': sites},
+        data={'sites': sites, 'elsewhere': elsewhere},
         unread=[f'{path}: could not be parsed' for path in unparsed],
     )
 
@@ -466,16 +505,17 @@ def gather_exec_sites(source: CharmSource) -> Evidence:
 def decide_safe_subprocess(evidence: Evidence) -> ItemAssessment:
     """Rule on the gathered call sites."""
     sites: list[_ExecSite] = evidence.data.get('sites', [])
+    elsewhere: list[str] = evidence.data.get('elsewhere', [])
     checklist_id = 'best-practice-safe-subprocess'
 
     # A file that did not parse is exactly where an unexamined call could be.
     # `ItemCheck.assess` caps the verdict for that, so this only has to rule on
     # what it could read.
-    if not sites:
+    if not sites and not elsewhere:
         return ItemAssessment(
             checklist_id=checklist_id,
             verdict=Verdict.NOT_APPLICABLE,
-            rationale='The charm does not run any commands in its workload container.',
+            rationale='The charm does not run any external commands.',
         )
 
     failing = [site for site in sites if site.problems]
@@ -499,6 +539,23 @@ def decide_safe_subprocess(evidence: Evidence) -> ItemAssessment:
                 f'{len(undecidable)} of {len(sites)} Container.exec call(s) build their '
                 f'command somewhere the check cannot see.'
             ),
+            evidence=evidence.lines,
+        )
+
+    # The item covers every command the charm runs, and this check only looks
+    # at Container.exec, so it can't settle the item for a charm that also
+    # runs commands through subprocess or os.
+    if elsewhere:
+        rationale = (
+            'The charm runs commands through subprocess or os, which this check leaves '
+            'to ruff, so it cannot settle the item on its own.'
+        )
+        if sites:
+            rationale += f' Its {len(sites)} Container.exec call(s) are fine.'
+        return ItemAssessment(
+            checklist_id=checklist_id,
+            verdict=Verdict.NEEDS_HUMAN,
+            rationale=rationale,
             evidence=evidence.lines,
         )
 
