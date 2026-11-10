@@ -1780,10 +1780,12 @@ class _InstallVisitor(ast.NodeVisitor):
         self.sites.append(_InstallSite(location=self._location(node), pinned=False, detail=detail))
 
     def _judge_download(self, node: ast.Call, tokens: list[str], program: str) -> None:
-        urls = [t for t in tokens[1:] if not t.startswith('-')]
-        if not urls:
+        arguments = [t for t in tokens[1:] if not t.startswith('-')]
+        if not arguments:
             return
-        url = urls[0]
+        # `curl -o <path> <url>` puts the output path first, so prefer whatever
+        # looks like a URL over the first bare argument.
+        url = next((t for t in arguments if '://' in t), arguments[0])
         if 'latest' in pathlib.PurePosixPath(url).as_posix().lower():
             self.sites.append(
                 _InstallSite(

@@ -1059,6 +1059,15 @@ class TestPinWorkloadVersionsMachine:
                 "subprocess.run(['curl', '-LO', 'https://example.com/foo/latest/foo.tar.gz'])",
                 Verdict.FAIL,
             ),
+            # The output path comes before the URL; it's the URL that is judged.
+            (
+                "subprocess.run(['curl', '-o', '/tmp/latest.tgz', 'https://ex.com/v1.2.3/app.tgz'])",
+                Verdict.NEEDS_HUMAN,
+            ),
+            (
+                "subprocess.run(['curl', '-o', '/tmp/app.tgz', 'https://ex.com/latest/app.tgz'])",
+                Verdict.FAIL,
+            ),
         ],
     )
     def test_cli_install_commands(self, tmp_path: pathlib.Path, source: str, expected: Verdict):
@@ -1066,6 +1075,15 @@ class TestPinWorkloadVersionsMachine:
             _source(tmp_path, **{'src/charm.py': f'import subprocess\n{source}\n'})
         )
         assert assessment.verdict is expected
+
+    def test_wget_output_path_is_not_reported_as_the_download(self, tmp_path: pathlib.Path):
+        source = (
+            'import subprocess\n'
+            "subprocess.run(['wget', '-O', '/opt/app.tgz', 'https://ex.com/v1.2.3/app.tgz'])\n"
+        )
+        assessment = pin_workload_versions.assess(_source(tmp_path, **{'src/charm.py': source}))
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert any("'https://ex.com/v1.2.3/app.tgz'" in line for line in assessment.evidence)
 
     def test_cli_download_without_a_version_marker_needs_a_human(self, tmp_path: pathlib.Path):
         assessment = pin_workload_versions.assess(
