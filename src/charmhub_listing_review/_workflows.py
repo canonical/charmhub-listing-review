@@ -32,7 +32,6 @@ from __future__ import annotations
 import dataclasses
 import fnmatch
 import pathlib
-import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -352,7 +351,3 @@ def step_commands(workflow: Workflow) -> list[tuple[str, str]]:
             (location, line) for line in _joined_lines(run) if line and not line.startswith('#')
         )
     return commands
-
-
-def matches_any(text: str, patterns: tuple[re.Pattern[str], ...]) -> bool:
-    return any(pattern.search(text) for pattern in patterns)
