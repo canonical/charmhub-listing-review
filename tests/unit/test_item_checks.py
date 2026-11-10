@@ -82,6 +82,20 @@ class TestCharmcraftYaml:
         assert CharmSource(charm_path=tmp_path).charmcraft_yaml() == {}
 
 
+class TestCharmSourceRepo:
+    def test_defaults_to_the_charm_directory(self, tmp_path: pathlib.Path):
+        assert CharmSource(charm_path=tmp_path).repo == tmp_path
+
+    def test_follows_a_reassigned_charm_directory(self, tmp_path: pathlib.Path):
+        source = CharmSource(charm_path=tmp_path)
+        source.charm_path = tmp_path / 'charms' / 'my-charm'
+        assert source.repo == tmp_path / 'charms' / 'my-charm'
+
+    def test_explicit_root(self, tmp_path: pathlib.Path):
+        source = CharmSource(charm_path=tmp_path / 'charms' / 'my-charm', repo_path=tmp_path)
+        assert source.repo == tmp_path
+
+
 class TestUnreadInputsCapTheVerdict:
     """An item cannot be settled by evidence it could not read."""
 

@@ -127,15 +127,10 @@ class CharmSource:
     default_branch: str = 'main'
     """The repository's default branch, for "runs on every change to" items."""
 
-    def __post_init__(self):
-        if self.repo_path is None:
-            self.repo_path = self.charm_path
-
     @property
     def repo(self) -> pathlib.Path:
         """The repository root, never ``None``."""
-        assert self.repo_path is not None
-        return self.repo_path
+        return self.repo_path or self.charm_path
 
     def charmcraft_yaml(self) -> dict[str, Any]:
         """Parse ``charmcraft.yaml``, returning ``{}`` if it is missing or bad."""
