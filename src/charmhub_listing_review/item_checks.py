@@ -255,8 +255,12 @@ class _ExecVisitor(ast.NodeVisitor):
         # statement. `container.exec(...).wait_output()` does not appear here,
         # because there the outer wait_output() call is the statement.
         self._discarded: set[int] = set()
+        # Calls whose return value is assigned to a single name, by call.
+        self._held: dict[int, str] = {}
         # Local names that hold a literal command, innermost scope last.
         self._scopes: list[dict[str, ast.expr]] = []
+        # The statements of each enclosing scope, innermost last.
+        self._bodies: list[list[ast.stmt]] = []
 
     def visit_Module(self, node: ast.Module) -> None:
         self._visit_scope(node, node.body)
@@ -269,7 +273,9 @@ class _ExecVisitor(ast.NodeVisitor):
 
     def _visit_scope(self, node: ast.AST, body: list[ast.stmt]) -> None:
         self._push_scope(body)
+        self._bodies.append(body)
         self.generic_visit(node)
+        self._bodies.pop()
         self._scopes.pop()
 
     def _push_scope(self, body: list[ast.stmt]) -> None:
@@ -309,6 +315,56 @@ class _ExecVisitor(ast.NodeVisitor):
             self._discarded.add(id(node.value))
         self.generic_visit(node)
 
+    def visit_Assign(self, node: ast.Assign) -> None:
+        if len(node.targets) == 1:
+            self._hold(node.targets[0], node.value)
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        self._hold(node.target, node.value)
+        self.generic_visit(node)
+
+    def _hold(self, target: ast.expr, value: ast.expr | None) -> None:
+        if isinstance(target, ast.Name) and isinstance(value, ast.Call):
+            self._held[id(value)] = target.id
+
+    def _check_held(self, site: _ExecSite, name: str) -> None:
+        """Check that an ExecProcess kept in a local is waited on.
+
+        ``proc = container.exec([...])`` is as much a discarded process as a
+        bare call if nothing waits on ``proc``. If the scope waits on it, that
+        is fine. If ``proc`` goes somewhere else (returned, passed on, read
+        from), the wait may happen out of sight, so the site is left to a
+        human rather than passed.
+        """
+        waited = False
+        used = False
+        scope = ast.Module(body=self._bodies[-1] if self._bodies else [], type_ignores=[])
+        for node in ast.walk(scope):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in {'wait', 'wait_output'}
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == name
+            ):
+                waited = True
+            elif isinstance(node, ast.Name) and node.id == name and isinstance(node.ctx, ast.Load):
+                used = True
+        if waited:
+            return
+        if used:
+            if not site.undecidable:
+                site.undecidable = (
+                    f'the ExecProcess is kept in {name!r} and used without a wait() here, '
+                    f'so whether it is waited on is not visible'
+                )
+            return
+        site.problems.append(
+            f'keeps the ExecProcess in {name!r} but never waits on it, '
+            f'so a failure is never noticed'
+        )
+
     def visit_Call(self, node: ast.Call) -> None:
         """Handle ``<container>.exec([...])``.
 
@@ -325,6 +381,8 @@ class _ExecVisitor(ast.NodeVisitor):
                 site.problems.append(
                     'discards the ExecProcess without waiting, so a failure is never noticed'
                 )
+            elif id(node) in self._held:
+                self._check_held(site, self._held[id(node)])
             self.sites.append(site)
         self.generic_visit(node)
 

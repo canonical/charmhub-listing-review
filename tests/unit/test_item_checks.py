@@ -124,6 +124,43 @@ class TestSafeSubprocess:
         assert assessment.verdict is Verdict.PASS
 
     @pytest.mark.parametrize(
+        'body',
+        [
+            "proc = container.exec(['/usr/bin/id'])\n",
+            "proc: ops.pebble.ExecProcess = container.exec(['/usr/bin/id'])\n",
+            "_ = container.exec(['/usr/bin/id'])\n",
+        ],
+    )
+    def test_container_exec_kept_but_never_waited_on(self, tmp_path: pathlib.Path, body: str):
+        assessment = _assess(
+            tmp_path, **{'src/charm.py': f'import ops\ndef f(container):\n    {body}'}
+        )
+        assert assessment.verdict is Verdict.FAIL
+        assert any('never waits on it' in line for line in assessment.evidence)
+
+    @pytest.mark.parametrize('wait', ['proc.wait()', 'out, _ = proc.wait_output()'])
+    def test_container_exec_kept_and_waited_on(self, tmp_path: pathlib.Path, wait: str):
+        source = (
+            'import ops\n'
+            'def f(container):\n'
+            "    proc = container.exec(['/usr/bin/id'])\n"
+            f'    {wait}\n'
+        )
+        assessment = _assess(tmp_path, **{'src/charm.py': source})
+        assert assessment.verdict is Verdict.PASS
+
+    def test_container_exec_kept_and_handed_on(self, tmp_path: pathlib.Path):
+        source = (
+            'import ops\n'
+            'def f(container):\n'
+            "    proc = container.exec(['/usr/bin/id'])\n"
+            '    return proc\n'
+        )
+        assessment = _assess(tmp_path, **{'src/charm.py': source})
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert any("kept in 'proc'" in line for line in assessment.evidence)
+
+    @pytest.mark.parametrize(
         'command,expected',
         [
             ("'chown git /data'", 'as a string rather than a list'),
