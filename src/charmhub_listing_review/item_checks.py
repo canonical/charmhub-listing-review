@@ -43,6 +43,11 @@ of these items have a large mechanical core and a small judgement tail. An
 item that returns ``NEEDS_HUMAN`` carries its gathered evidence with it, so
 the backend is given the same material a reviewer would read rather than the
 whole repository.
+
+:class:`~._models.Verdict` and :class:`~._models.ItemAssessment` are in
+``_models`` because they are the result, and the renderers will read them
+alongside ``CheckResult``. :class:`Evidence` and :class:`CharmSource` are the
+inputs to a check, and nothing outside this module needs them.
 """
 
 from __future__ import annotations
