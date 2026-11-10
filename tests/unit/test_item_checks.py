@@ -1076,6 +1076,36 @@ class TestPinWorkloadVersionsMachine:
         )
         assert assessment.verdict is expected
 
+    def test_an_unparsed_file_stops_a_pass(self, tmp_path: pathlib.Path):
+        """The unparsed file is the likeliest place for a floating install."""
+        assessment = pin_workload_versions.assess(
+            _source(
+                tmp_path,
+                **{
+                    'src/utils.py': (
+                        "import subprocess\nsubprocess.run(['apt-get', 'install', 'nginx=1.2'])\n"
+                    ),
+                    'src/broken.py': 'def (\n',
+                },
+            )
+        )
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert 'could not be parsed' in assessment.rationale
+
+    def test_an_unparsed_file_does_not_hide_a_failure(self, tmp_path: pathlib.Path):
+        assessment = pin_workload_versions.assess(
+            _source(
+                tmp_path,
+                **{
+                    'src/utils.py': (
+                        "import subprocess\nsubprocess.run(['apt-get', 'install', 'nginx'])\n"
+                    ),
+                    'src/broken.py': 'def (\n',
+                },
+            )
+        )
+        assert assessment.verdict is Verdict.FAIL
+
     def test_wget_output_path_is_not_reported_as_the_download(self, tmp_path: pathlib.Path):
         source = (
             'import subprocess\n'

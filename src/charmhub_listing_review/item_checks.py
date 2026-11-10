@@ -1936,6 +1936,20 @@ def _decide_install_pinning(checklist_id: str, evidence: Evidence) -> ItemAssess
             evidence=evidence.lines,
         )
 
+    # A floating install that was found is a failure whatever else went
+    # unread. Short of that, an unparsed file is the likeliest place for one
+    # to be, so the readable sites alone can't pass the item.
+    if unparsed:
+        return ItemAssessment(
+            checklist_id=checklist_id,
+            verdict=Verdict.NEEDS_HUMAN,
+            rationale=(
+                f'The {len(sites)} install call(s) found pin what they install or need a '
+                f'human to check, but {len(unparsed)} file(s) could not be parsed.'
+            ),
+            evidence=evidence.lines,
+        )
+
     undecidable = [site for site in sites if site.pinned is None]
     if undecidable:
         return ItemAssessment(
