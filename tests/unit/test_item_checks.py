@@ -792,6 +792,47 @@ class TestNoDuplicateModelConfig:
         assert assessment.verdict is Verdict.NEEDS_HUMAN
         assert assessment.evidence == ['port: The port to listen on.']
 
+    def test_legacy_config_yaml_is_read(self, tmp_path: pathlib.Path):
+        assessment = no_duplicate_model_config.assess(
+            _source(
+                tmp_path,
+                **{
+                    'charmcraft.yaml': 'name: my-charm\n',
+                    'config.yaml': 'options:\n  http-proxy:\n    type: string\n',
+                },
+            )
+        )
+        assert assessment.verdict is Verdict.FAIL
+        assert 'http-proxy' in assessment.rationale
+
+    def test_options_from_both_files_are_merged(self, tmp_path: pathlib.Path):
+        charmcraft = 'name: my-charm\nconfig:\n  options:\n    port:\n      type: int\n'
+        assessment = no_duplicate_model_config.assess(
+            _source(
+                tmp_path,
+                **{
+                    'charmcraft.yaml': charmcraft,
+                    'config.yaml': 'options:\n  no-proxy:\n    type: string\n',
+                },
+            )
+        )
+        assert assessment.verdict is Verdict.FAIL
+        assert 'no-proxy' in assessment.rationale
+
+    @pytest.mark.parametrize(
+        'files',
+        [
+            {},
+            {'charmcraft.yaml': 'name: [unclosed\n'},
+            {'charmcraft.yaml': 'name: my-charm\n', 'config.yaml': '- not\n- a mapping\n'},
+        ],
+    )
+    def test_unreadable_config_is_not_no_config(
+        self, tmp_path: pathlib.Path, files: dict[str, str]
+    ):
+        assessment = no_duplicate_model_config.assess(_source(tmp_path, **files))
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+
     def test_registered_under_its_checklist_id(self):
         assert ITEM_CHECKS['best-practice-no-duplicate-model-config'] is no_duplicate_model_config
 
@@ -877,6 +918,13 @@ class TestDependencyUpdateTooling:
         charm_only = CharmSource(charm_path=tmp_path / 'charms' / 'my-charm')
         assert dependency_update_tooling.assess(charm_only).verdict is Verdict.FAIL
 
+    def test_unparseable_package_json_is_not_no_config(self, tmp_path: pathlib.Path):
+        assessment = dependency_update_tooling.assess(
+            _source(tmp_path, **{'package.json': '{broken\n'})
+        )
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert 'package.json: could not be read as JSON' in assessment.evidence
+
     def test_registered_under_its_checklist_id(self):
         assert (
             ITEM_CHECKS['best-practice-automated-dependency-updates'] is dependency_update_tooling
@@ -938,6 +986,17 @@ class TestAvoidCharmPlugin:
             _source(tmp_path, **{'charmcraft.yaml': charmcraft})
         )
         assert assessment.verdict is Verdict.FAIL
+
+    @pytest.mark.parametrize(
+        'files',
+        [{'README.md': 'hi\n'}, {'charmcraft.yaml': 'parts: [unclosed\n'}],
+    )
+    def test_missing_or_broken_charmcraft_yaml_is_not_the_default_plugin(
+        self, tmp_path: pathlib.Path, files: dict[str, str]
+    ):
+        assessment = avoid_charm_plugin.assess(_source(tmp_path, **files))
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert any(line.startswith('charmcraft.yaml: ') for line in assessment.evidence)
 
     def test_registered_under_its_checklist_id(self):
         assert ITEM_CHECKS['best-practice-avoid-charm-plugin'] is avoid_charm_plugin

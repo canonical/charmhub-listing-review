@@ -142,16 +142,70 @@ class CharmSource:
         assert self.repo_path is not None
         return self.repo_path
 
-    def charmcraft_yaml(self) -> dict[str, Any]:
-        """Parse ``charmcraft.yaml``, returning ``{}`` if it is missing or bad."""
-        path = self.charm_path / 'charmcraft.yaml'
+    def _read_yaml(self, name: str) -> tuple[dict[str, Any] | None, str]:
+        """Parse a YAML mapping in the charm directory.
+
+        Returns ``(None, '')`` if the file doesn't exist, ``({}, reason)`` if it
+        exists but couldn't be used, and ``(data, '')`` otherwise.
+        """
+        path = self.charm_path / name
         if not path.is_file():
-            return {}
+            return None, ''
         try:
             data = yaml.safe_load(path.read_text(encoding='utf-8', errors='replace'))
-        except yaml.YAMLError:
-            return {}
-        return data if isinstance(data, dict) else {}
+        except (yaml.YAMLError, OSError):
+            return {}, f'{name}: could not be read as YAML'
+        if not isinstance(data, dict):
+            return {}, f'{name}: is not a YAML mapping'
+        return data, ''
+
+    def charmcraft_yaml(self) -> dict[str, Any]:
+        """Parse ``charmcraft.yaml``, returning ``{}`` if it is missing or bad.
+
+        Use :meth:`charmcraft_unread` to tell those apart from an empty file.
+        """
+        data, _ = self._read_yaml('charmcraft.yaml')
+        return data or {}
+
+    def charmcraft_unread(self) -> list[str]:
+        """Why ``charmcraft.yaml`` couldn't be read, for ``Evidence.unread``.
+
+        A missing or broken file looks the same as an empty one to
+        :meth:`charmcraft_yaml`, and an empty one is a real answer for some
+        items: no ``parts`` means the ``charm`` plugin. An item that reads it
+        should pass this on so that ``ItemCheck.assess`` can cap the verdict.
+        """
+        data, problem = self._read_yaml('charmcraft.yaml')
+        if data is None:
+            return ['charmcraft.yaml: not found']
+        return [problem] if problem else []
+
+    def config_options(self) -> tuple[dict[str, Any], list[str]]:
+        """The charm's config options, and anything that couldn't be read.
+
+        Options can be in ``charmcraft.yaml`` or in a legacy ``config.yaml``,
+        so both are read and merged. A charm with only ``config.yaml`` is not
+        a charm without options.
+        """
+        options: dict[str, Any] = {}
+        unread: list[str] = []
+        files = 0
+        for name in ('charmcraft.yaml', 'config.yaml'):
+            data, problem = self._read_yaml(name)
+            if data is None:
+                continue
+            files += 1
+            if problem:
+                unread.append(problem)
+                continue
+            block = data if name == 'config.yaml' else data.get('config')
+            found = block.get('options') if isinstance(block, dict) else None
+            if isinstance(found, dict):
+                for option, definition in found.items():
+                    options.setdefault(option, definition)
+        if not files:
+            unread.append('neither charmcraft.yaml nor config.yaml was found')
+        return options, unread
 
 
 @dataclasses.dataclass
@@ -1118,11 +1172,7 @@ def _normalise_option(name: str) -> str:
 
 def gather_config_options(source: CharmSource) -> Evidence:
     """Collect the charm's config options and any model-config key they match."""
-    charmcraft = source.charmcraft_yaml()
-    config = charmcraft.get('config')
-    options = config.get('options') if isinstance(config, dict) else None
-    if not isinstance(options, dict):
-        options = {}
+    options, unread = source.config_options()
 
     duplicates: list[tuple[str, str]] = []
     others: list[str] = []
@@ -1143,6 +1193,7 @@ def gather_config_options(source: CharmSource) -> Evidence:
     return Evidence(
         lines=lines or others,
         data={'duplicates': duplicates, 'others': others, 'option_count': len(options)},
+        unread=unread,
     )
 
 
@@ -1227,17 +1278,19 @@ def gather_dependency_update_tooling(source: CharmSource) -> Evidence:
         if (repo / relative).is_file()
     ]
 
+    unread: list[str] = []
     package_json = repo / 'package.json'
     if package_json.is_file():
         try:
             data = json.loads(package_json.read_text(encoding='utf-8', errors='replace'))
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, OSError):
             data = {}
+            unread.append('package.json: could not be read as JSON')
         if isinstance(data, dict) and 'renovate' in data:
             found.append('package.json (renovate section)')
 
     lines = [f'{path}: present' for path in found]
-    return Evidence(lines=lines, data={'found': found})
+    return Evidence(lines=lines, data={'found': found}, unread=unread)
 
 
 def decide_dependency_update_tooling(evidence: Evidence) -> ItemAssessment:
@@ -1287,11 +1340,13 @@ def gather_charm_plugin(source: CharmSource) -> Evidence:
     other.
     """
     charmcraft = source.charmcraft_yaml()
+    unread = source.charmcraft_unread()
     parts = charmcraft.get('parts')
     if not isinstance(parts, dict) or not parts:
         return Evidence(
             lines=['No `parts` are declared, so Charmcraft defaults to the `charm` plugin.'],
             data={'declared': False, 'charm': [], 'migrated': [], 'other': {}},
+            unread=unread,
         )
 
     charm_parts: list[str] = []
@@ -1321,6 +1376,7 @@ def gather_charm_plugin(source: CharmSource) -> Evidence:
             'migrated': migrated_parts,
             'other': other_parts,
         },
+        unread=unread,
     )
 
 
