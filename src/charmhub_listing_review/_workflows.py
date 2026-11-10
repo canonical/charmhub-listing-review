@@ -283,11 +283,18 @@ def resolve_triggers(
 
 
 def describe_triggers(summary: TriggerSummary) -> str:
-    """A short human-readable description of when a workflow runs."""
-    events = ', '.join(sorted(summary.events)) or 'nothing'
+    """A short human-readable description of when a workflow runs.
+
+    A called workflow's ``workflow_call`` is left out once its callers are
+    named, since "(via ...)" already says how it runs.
+    """
+    events = summary.events
     if summary.called_by:
-        events += f' (via {", ".join(sorted(summary.called_by))})'
-    return events
+        events = events - {'workflow_call'}
+    description = ', '.join(sorted(events)) or 'nothing'
+    if summary.called_by:
+        description += f' (via {", ".join(sorted(summary.called_by))})'
+    return description
 
 
 def iter_steps(workflow: Workflow) -> Iterator[tuple[str, dict[str, Any]]]:

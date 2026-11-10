@@ -27,6 +27,7 @@ import pathlib
 import pytest
 
 from charmhub_listing_review._workflows import (
+    describe_triggers,
     load_workflows,
     resolve_triggers,
     step_commands,
@@ -124,6 +125,26 @@ class TestWorkflowCall:
         assert 'push' in leaf.events
         assert leaf.default_branch_push
         assert '.github/workflows/middle.yaml' in leaf.called_by
+
+    def test_description_names_callers_not_workflow_call(self, tmp_path: pathlib.Path):
+        repo = _repo(
+            tmp_path,
+            **{
+                'top.yaml': (
+                    "name: Top\non:\n  push:\n    branches: ['main']\n"
+                    'jobs:\n  call:\n    uses: ./.github/workflows/leaf.yaml\n'
+                ),
+                'leaf.yaml': 'name: Leaf\non:\n  workflow_call:\njobs: {}\n',
+                'orphan.yaml': 'name: Orphan\non:\n  workflow_call:\njobs: {}\n',
+            },
+        )
+        summaries = resolve_triggers(load_workflows(repo), 'main')
+        assert (
+            describe_triggers(summaries['.github/workflows/leaf.yaml'])
+            == 'push (via .github/workflows/top.yaml)'
+        )
+        # Nothing calls it, so workflow_call is the only thing to say.
+        assert describe_triggers(summaries['.github/workflows/orphan.yaml']) == 'workflow_call'
 
     def test_a_caller_that_does_not_run_on_the_default_branch_does_not_confer_it(
         self, tmp_path: pathlib.Path
