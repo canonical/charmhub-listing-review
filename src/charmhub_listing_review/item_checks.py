@@ -463,6 +463,17 @@ safe_subprocess = ItemCheck(
 )
 
 
+def _join_clauses(clauses: list[str]) -> str:
+    """Join the reasons behind a verdict into one rationale clause.
+
+    Every reason is reported, not just the first: two workflows can each be
+    held back by a different filter, and naming one sends the reviewer to fix
+    it and come back to find the other. Repeats, such as two jobs inheriting
+    the same caller's caveat, are dropped.
+    """
+    return '; and '.join(dict.fromkeys(clauses))
+
+
 # --- ci-automated-releasing ---------------------------------------------------
 
 # Shell commands that publish a charm.
@@ -653,13 +664,14 @@ def decide_automated_releasing(evidence: Evidence) -> ItemAssessment:
             evidence=evidence.lines,
         )
 
-    caveats = [caveat for release in automatic for caveat in release.caveats]
+    caveats = [f'{release.path}: {caveat}' for release in automatic for caveat in release.caveats]
     if caveats:
         return ItemAssessment(
             checklist_id=checklist_id,
             verdict=Verdict.NEEDS_HUMAN,
             rationale=(
-                f'Releasing runs on the default branch, but not for every change: {caveats[0]}.'
+                f'Releasing runs on the default branch, but not for every change: '
+                f'{_join_clauses(caveats)}.'
             ),
             evidence=evidence.lines,
         )
@@ -978,9 +990,9 @@ def decide_integration_tests(evidence: Evidence) -> ItemAssessment:
     elif not running:
         failures.append('no workflow runs them')
 
-    caveats = [caveat for entry in automatic for caveat in entry['caveats']]
+    caveats = [f'{entry["path"]}: {caveat}' for entry in automatic for caveat in entry['caveats']]
     if caveats:
-        failures.append(f'they do not run on every change - {caveats[0]}')
+        failures.append(f'they do not run on every change: {_join_clauses(caveats)}')
 
     unattributed: list[str] = evidence.data.get('unattributed', [])
     if uncovered and not unattributed:
@@ -1003,7 +1015,7 @@ def decide_integration_tests(evidence: Evidence) -> ItemAssessment:
         return ItemAssessment(
             checklist_id=checklist_id,
             verdict=Verdict.FAIL,
-            rationale=f'The charm has integration tests, but {"; and ".join(failures)}.',
+            rationale=f'The charm has integration tests, but {_join_clauses(failures)}.',
             evidence=evidence.lines,
         )
 
@@ -1023,7 +1035,7 @@ def decide_integration_tests(evidence: Evidence) -> ItemAssessment:
     return ItemAssessment(
         checklist_id=checklist_id,
         verdict=Verdict.NEEDS_HUMAN,
-        rationale=f'The charm has integration tests {coverage}; {"; and ".join(deferred)}.',
+        rationale=f'The charm has integration tests {coverage}; {_join_clauses(deferred)}.',
         evidence=evidence.lines,
     )
 

@@ -361,6 +361,27 @@ jobs:
         assert assessment.verdict is Verdict.NEEDS_HUMAN
         assert 'paths filter' in assessment.rationale
 
+    def test_every_caveat_is_reported(self, tmp_path: pathlib.Path):
+        edge = _RELEASE_ON_PUSH.replace(
+            'branches: [main]', "branches: [main]\n    paths: ['src/**']"
+        )
+        beta = _RELEASE_ON_PUSH.replace(
+            'branches: [main]', "branches: [main]\n    paths-ignore: ['docs/**']"
+        )
+        assessment = automated_releasing.assess(
+            _source(
+                tmp_path,
+                **{'.github/workflows/edge.yaml': edge, '.github/workflows/beta.yaml': beta},
+            )
+        )
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert '.github/workflows/edge.yaml: its push trigger has a paths filter' in (
+            assessment.rationale
+        )
+        assert '.github/workflows/beta.yaml: its push trigger has a paths-ignore filter' in (
+            assessment.rationale
+        )
+
     def test_a_reusable_workflow_inherits_its_callers_triggers(self, tmp_path: pathlib.Path):
         """`workflow_call` has no triggers of its own; the caller's decide it."""
         called = """
