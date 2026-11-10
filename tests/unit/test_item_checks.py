@@ -914,12 +914,50 @@ class TestPinWorkloadVersionsKubernetes:
         assert assessment.verdict is Verdict.FAIL
         assert 'floating-image' in assessment.rationale
 
-    def test_kubernetes_charm_with_no_oci_resource_is_not_applicable(self, tmp_path: pathlib.Path):
+    def test_a_container_whose_resource_is_not_declared_needs_a_human(
+        self, tmp_path: pathlib.Path
+    ):
+        """Charmcraft needs an oci-image resource for this container, and there isn't one."""
         charmcraft = 'name: my-charm\ncontainers:\n  workload:\n    resource: my-image\n'
         assessment = pin_workload_versions.assess(
             _source(tmp_path, **{'charmcraft.yaml': charmcraft})
         )
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert 'workload' in assessment.rationale
+        assert any("uses resource 'my-image'" in line for line in assessment.evidence)
+
+    def test_a_container_with_neither_resource_nor_bases_needs_a_human(
+        self, tmp_path: pathlib.Path
+    ):
+        charmcraft = 'name: my-charm\ncontainers:\n  workload:\n    mounts: []\n'
+        assessment = pin_workload_versions.assess(
+            _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        )
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+
+    def test_containers_that_all_use_bases_are_not_applicable(self, tmp_path: pathlib.Path):
+        charmcraft = (
+            'name: my-charm\ncontainers:\n  workload:\n    bases:\n'
+            '      - name: ubuntu\n        channel: "22.04"\n'
+        )
+        assessment = pin_workload_versions.assess(
+            _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        )
         assert assessment.verdict is Verdict.NOT_APPLICABLE
+
+    def test_a_floating_image_still_fails_alongside_a_missing_one(self, tmp_path: pathlib.Path):
+        charmcraft = (
+            'name: my-charm\n'
+            'containers:\n  workload:\n    resource: floating-image\n'
+            '  sidecar:\n    resource: undeclared\n'
+            'resources:\n'
+            '  floating-image:\n    type: oci-image\n    description: floating\n'
+            '    upstream-source: docker.io/foo/floating:latest\n'
+        )
+        assessment = pin_workload_versions.assess(
+            _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        )
+        assert assessment.verdict is Verdict.FAIL
 
 
 class TestPinWorkloadVersionsMachine:

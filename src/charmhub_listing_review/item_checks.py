@@ -1823,7 +1823,16 @@ def gather_pin_workload_versions(source: CharmSource) -> Evidence:
             else f'{r.name}: no `upstream-source` given'
             for r in oci_resources
         ]
-        return Evidence(lines=lines, data={'kind': 'kubernetes', 'oci_resources': oci_resources})
+        missing_images = _containers_missing_an_image(containers, {r.name for r in oci_resources})
+        lines.extend(f'{name}: {reason}' for name, reason in missing_images)
+        return Evidence(
+            lines=lines,
+            data={
+                'kind': 'kubernetes',
+                'oci_resources': oci_resources,
+                'missing_images': missing_images,
+            },
+        )
 
     sites: list[_InstallSite] = []
     unparsed: list[str] = []
@@ -1843,6 +1852,34 @@ def gather_pin_workload_versions(source: CharmSource) -> Evidence:
     return Evidence(lines=lines, data={'kind': 'machine', 'sites': sites, 'unparsed': unparsed})
 
 
+def _containers_missing_an_image(
+    containers: dict[Any, Any], oci_resource_names: set[str]
+) -> list[tuple[str, str]]:
+    """Containers whose image can't be found, and why.
+
+    A container gets its image either from an `oci-image` resource
+    (``resource:``) or from a base (``bases:``), and only the first has an
+    image to pin. A ``resource:`` that names nothing declared, or a container
+    with neither key, means the image is somewhere this check can't see.
+    """
+    missing: list[tuple[str, str]] = []
+    for name, definition in containers.items():
+        if not isinstance(definition, dict):
+            missing.append((str(name), 'has no definition, so its image is not known'))
+            continue
+        resource = definition.get('resource')
+        if resource is not None:
+            if str(resource) not in oci_resource_names:
+                missing.append((
+                    str(name),
+                    f'uses resource {resource!r}, which is not declared as an `oci-image` '
+                    f'resource',
+                ))
+        elif 'bases' not in definition:
+            missing.append((str(name), 'names neither a `resource` nor `bases`'))
+    return missing
+
+
 def decide_pin_workload_versions(evidence: Evidence) -> ItemAssessment:
     """Rule on whether the workload's version is pinned, machine or Kubernetes."""
     checklist_id = 'best-practice-pin-workload-versions'
@@ -1853,11 +1890,15 @@ def decide_pin_workload_versions(evidence: Evidence) -> ItemAssessment:
 
 def _decide_oci_pinning(checklist_id: str, evidence: Evidence) -> ItemAssessment:
     resources: list[_OciResource] = evidence.data.get('oci_resources', [])
-    if not resources:
+    missing_images: list[tuple[str, str]] = evidence.data.get('missing_images', [])
+    if not resources and not missing_images:
         return ItemAssessment(
             checklist_id=checklist_id,
             verdict=Verdict.NOT_APPLICABLE,
-            rationale='The charm declares containers but no `oci-image` resource for them.',
+            rationale=(
+                'Every container takes its image from `bases`, so there is no OCI image '
+                'resource to pin.'
+            ),
         )
 
     floating = [r for r in resources if r.pin == 'floating']
@@ -1869,6 +1910,19 @@ def _decide_oci_pinning(checklist_id: str, evidence: Evidence) -> ItemAssessment
             rationale=(
                 f'{len(floating)} of {len(resources)} OCI resource(s) float to `latest` or an '
                 f'untagged reference: {names}.'
+            ),
+            evidence=evidence.lines,
+        )
+
+    if missing_images:
+        names = ', '.join(sorted(name for name, _ in missing_images))
+        return ItemAssessment(
+            checklist_id=checklist_id,
+            verdict=Verdict.NEEDS_HUMAN,
+            rationale=(
+                f'{len(missing_images)} container(s) have no `oci-image` resource this check '
+                f'can find: {names}. Charmcraft requires one for each container that does '
+                f'not use `bases`, so where its image is pinned needs a human to check.'
             ),
             evidence=evidence.lines,
         )
