@@ -2001,6 +2001,12 @@ _WORD_RE = re.compile(r"[a-z0-9']+")
 _PARAPHRASE_MAX_LENGTH_RATIO = 2.0
 _PARAPHRASE_MIN_OVERLAP = 0.2
 
+# The ratio alone punishes a thorough summary: Charmcraft allows a summary of
+# about 30 words, and the ratio would then want a 60-word description. So a
+# description is only a paraphrase if it also adds fewer than this many
+# distinct words that aren't in the summary. forgejo-k8s's adds 6.
+_PARAPHRASE_MAX_NEW_WORDS = 10
+
 
 def _normalise_words(text: str) -> list[str]:
     return _WORD_RE.findall(text.lower())
@@ -2057,14 +2063,20 @@ def decide_summary_description(evidence: Evidence) -> ItemAssessment:
 
     length_ratio = len(description_words) / len(summary_words)
     overlap = len(set(summary_words) & set(description_words)) / len(set(summary_words))
+    new_words = len(set(description_words) - set(summary_words))
 
-    if length_ratio < _PARAPHRASE_MAX_LENGTH_RATIO and overlap >= _PARAPHRASE_MIN_OVERLAP:
+    if (
+        length_ratio < _PARAPHRASE_MAX_LENGTH_RATIO
+        and overlap >= _PARAPHRASE_MIN_OVERLAP
+        and new_words < _PARAPHRASE_MAX_NEW_WORDS
+    ):
         return ItemAssessment(
             checklist_id=checklist_id,
             verdict=Verdict.FAIL,
             rationale=(
-                'description is not meaningfully longer than summary and shares a good share '
-                'of its vocabulary - it reads as a paraphrase rather than a fuller description.'
+                f'description is not meaningfully longer than summary, shares a good share '
+                f'of its vocabulary, and adds only {new_words} word(s) of its own - it reads '
+                f'as a paraphrase rather than a fuller description.'
             ),
             evidence=evidence.lines,
         )

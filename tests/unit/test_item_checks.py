@@ -1203,6 +1203,22 @@ class TestSummaryDescription:
         )
         assert assessment.verdict is Verdict.NEEDS_HUMAN
 
+    def test_a_thorough_summary_is_not_punished(self, tmp_path: pathlib.Path):
+        """The description is under twice the summary's length but says plenty more."""
+        charmcraft = (
+            'name: my-charm\n'
+            'summary: Apache Kafka is a distributed event streaming platform; this charm '
+            'deploys and operates Kafka brokers on machines with Juju.\n'
+            'description: Deploys Kafka brokers in KRaft mode, with TLS and SASL '
+            'authentication, Prometheus metrics, log forwarding, rolling upgrades and '
+            'horizontal scaling. Integrates with clients over the kafka_client interface and '
+            'supports partition reassignment when units are added.\n'
+        )
+        assessment = summary_description.assess(
+            _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        )
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+
     def test_short_but_unrelated_description_needs_a_human(self, tmp_path: pathlib.Path):
         """Short and low-overlap: not a confident paraphrase, not a guessed pass either."""
         charmcraft = (
