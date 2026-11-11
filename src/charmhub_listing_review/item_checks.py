@@ -3077,8 +3077,10 @@ def decide_config_defaults(evidence: Evidence) -> ItemAssessment:
     """Rule on config exposure - as far as it can be judged.
 
     No options declared at all is NOT_APPLICABLE - the same "a real, free
-    result" shape item 23's no-`file`-resource branch has, and the charm is
-    already deployable with zero config, the item's own ideal. Otherwise
+    result" shape item 23's no-`file`-resource branch has. It is not a PASS:
+    a charm with no options can still break "expose only when necessary" by
+    hard-coding something that should be configurable, and nothing here
+    looks for that. Otherwise
     NEEDS_HUMAN: whether N options lacking a default is "best defaults" or
     "expose only when necessary" is a design judgement about the whole
     charm's shape (see the module comment above), not something this check
