@@ -2721,12 +2721,17 @@ library_status_mutation = ItemCheck(
 # not rule in "this is definitely charm-specific content".
 
 
-def _link_value(links: dict[str, Any], key: str) -> str:
-    """Read a `links.<key>` value, which may be a bare string or a list."""
+def _link_values(links: dict[str, Any], key: str) -> list[str]:
+    """Read every `links.<key>` value, which may be a bare string or a list."""
     value = links.get(key)
-    if isinstance(value, list):
-        return str(value[0]) if value else ''
-    return str(value or '')
+    values = value if isinstance(value, list) else [value]
+    return [str(item) for item in values if item]
+
+
+def _link_value(links: dict[str, Any], key: str) -> str:
+    """Read the first `links.<key>` value, which may be a bare string or a list."""
+    values = _link_values(links, key)
+    return values[0] if values else ''
 
 
 def _normalise_url(url: str) -> str:
@@ -2748,14 +2753,13 @@ def gather_documentation_link(source: CharmSource) -> Evidence:
     links = charmcraft.get('links')
     links = links if isinstance(links, dict) else {}
     documentation = _link_value(links, 'documentation')
-    website = _link_value(links, 'website')
+    websites = _link_values(links, 'website')
 
     lines = []
     if documentation:
         lines.append(f'documentation: {documentation}')
-    if website:
-        lines.append(f'website: {website}')
-    return Evidence(lines=lines, data={'documentation': documentation, 'website': website})
+    lines.extend(f'website: {website}' for website in websites)
+    return Evidence(lines=lines, data={'documentation': documentation, 'websites': websites})
 
 
 def decide_documentation_link(evidence: Evidence) -> ItemAssessment:
@@ -2771,7 +2775,7 @@ def decide_documentation_link(evidence: Evidence) -> ItemAssessment:
     """
     checklist_id = 'charmcraft-yaml-key-documentation'
     documentation: str = evidence.data.get('documentation', '')
-    website: str = evidence.data.get('website', '')
+    websites: list[str] = evidence.data.get('websites', [])
 
     if not documentation:
         return ItemAssessment(
@@ -2780,7 +2784,11 @@ def decide_documentation_link(evidence: Evidence) -> ItemAssessment:
             rationale='The charm declares no `documentation` link.',
         )
 
-    if website and _normalise_url(documentation) == _normalise_url(website):
+    # `website` can list several sites, such as the upstream project and the
+    # charm's own, so documentation is compared with each of them.
+    same = [w for w in websites if _normalise_url(w) == _normalise_url(documentation)]
+    if same:
+        website = same[0]
         return ItemAssessment(
             checklist_id=checklist_id,
             verdict=Verdict.FAIL,
@@ -2791,11 +2799,11 @@ def decide_documentation_link(evidence: Evidence) -> ItemAssessment:
             evidence=evidence.lines,
         )
 
-    if website:
+    if websites:
         rationale = (
             f'`documentation` ({documentation}) is a different page from `website` '
-            f'({website}); whether its content is actually about the charm still needs a '
-            f'human to check.'
+            f'({", ".join(websites)}); whether its content is actually about the charm '
+            f'still needs a human to check.'
         )
     else:
         rationale = (

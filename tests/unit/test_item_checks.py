@@ -1685,6 +1685,20 @@ class TestDocumentationLink:
         )
         assert assessment.verdict is Verdict.NEEDS_HUMAN
 
+    def test_documentation_is_compared_with_every_website(self, tmp_path: pathlib.Path):
+        """A charm listing its upstream project first doesn't escape the check."""
+        charmcraft = (
+            'name: my-charm\n'
+            'links:\n'
+            '  documentation: https://example.com\n'
+            '  website:\n    - https://other.org\n    - https://example.com/\n'
+        )
+        assessment = documentation_link.assess(
+            _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        )
+        assert assessment.verdict is Verdict.FAIL
+        assert 'website: https://other.org' in assessment.evidence
+
     def test_documentation_with_no_website_to_compare_needs_a_human(self, tmp_path: pathlib.Path):
         charmcraft = 'name: my-charm\nlinks:\n  documentation: https://example.com/docs\n'
         assessment = documentation_link.assess(
