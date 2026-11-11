@@ -1582,9 +1582,10 @@ class TestResourceArchitecturesNetwork:
     def test_charmhub_missing_architecture_still_needs_a_human_not_fail(
         self, tmp_path: pathlib.Path
     ):
-        """Confirming a gap strengthens the rationale, but PLAN.md's design note is explicit
+        """Confirming a gap strengthens the rationale, but it stays NEEDS_HUMAN.
 
-        that the public API does not unlock a PASS/FAIL branch - it stays NEEDS_HUMAN.
+        The public API can't show per-architecture resource revisions, so it can't settle
+        the item either way.
         """
         source = _source(tmp_path, **{'charmcraft.yaml': _CHARMCRAFT_WITH_FILE_RESOURCE})
         url = _CHARMHUB_URL_TEMPLATE.format(name='my-charm')
@@ -1932,9 +1933,9 @@ class TestConfigDefaults:
         assert any('config.yaml' in line for line in assessment.evidence)
 
     def test_options_missing_a_default_need_a_human_not_a_fail(self, tmp_path: pathlib.Path):
-        """PLAN.md's design note is explicit: Juju does not enforce a required option, so a
+        """A missing `default` is evidence for a human, never a confident FAIL.
 
-        missing `default` is evidence for a human, never a confident FAIL.
+        Juju does not enforce a required option, so it can be a deliberate design.
         """
         charmcraft = (
             'name: my-charm\n'

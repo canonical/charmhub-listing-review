@@ -48,9 +48,10 @@ A minority of items have evidence that does not live in the repository at
 all - Charmhub's own record of what has been published. Those items also set
 ``gather_network``, which runs through a :class:`Fetcher` seam
 (:class:`LiveFetcher` for a real call, :class:`FixtureFetcher` for tests)
-instead of touching the network from ``gather`` itself. See PLAN.md's
-network-access design note for why this stays a narrow, optional addition
-rather than a change to every item's contract.
+instead of touching the network from ``gather`` itself. It stays a narrow,
+optional addition rather than a change to every item's contract: the other
+items keep their offline, unmocked tests, and a run with no fetcher still
+works.
 """
 
 from __future__ import annotations
@@ -230,8 +231,8 @@ class LiveFetcher:
     timeout, every error (``OSError``, which covers ``URLError``,
     ``http.client.HTTPException`` and ``ValueError``) caught and turned into
     ``None`` rather than raised. A ``Fetcher`` failure must
-    never, by itself, license a ``FAIL`` - see PLAN.md's network-access
-    design note's failure-mode table.
+    never, by itself, license a ``FAIL``: like a file that will not parse, it is
+    absence of evidence, not evidence of absence.
     """
 
     def __init__(self, *, timeout: int = 5):
@@ -306,7 +307,7 @@ class ItemCheck:
     them. Only runs when both this is set and ``assess()`` is given a
     ``fetcher``; an item with a ``gather_network`` set degrades to exactly
     its local-only gate when no ``fetcher`` is passed (e.g. a sandboxed or
-    offline run). See PLAN.md's network-access design note.
+    offline run).
     """
 
     def assess(self, source: CharmSource, fetcher: Fetcher | None = None) -> ItemAssessment:
@@ -2065,9 +2066,8 @@ pin_workload_versions = ItemCheck(
 # values for `summary` and `description` - that is not this item's to build.
 # What is left is the quality comparison between the two, which
 # `metadata_links` never makes: does `description` actually say more than
-# `summary`, or is it the same sentence reworded? See AI-ITEM-VALIDATION.md's
-# "Item 8" section and PLAN.md's design note for the real example this is
-# calibrated on (`forgejo-k8s`: summary "Charmed Kubernetes operator for
+# `summary`, or is it the same sentence reworded? This is calibrated on a
+# real listing request (`forgejo-k8s`: summary "Charmed Kubernetes operator for
 # Forgejo.", description "Deploy and configure the software forge,
 # Forgejo." - barely longer, and not meaningfully more informative).
 
@@ -2459,19 +2459,19 @@ sensitive_logging = ItemCheck(
 
 # --- charmcraft-yaml-key-resources -----------------------------------------
 
-# The local-only half stays deliberately thin - see PLAN.md's "Item 23"
-# design note. The only evidence that lives in the repository is whether the
-# item applies at all: a `type: file` resource declared in `charmcraft.yaml`.
+# The local-only half stays deliberately thin. The only evidence that lives
+# in the repository is whether the item applies at all: a `type: file`
+# resource declared in `charmcraft.yaml`.
 # NOT_APPLICABLE for no `file` resource (a real, free result); NEEDS_HUMAN
 # otherwise, naming the declared resources and the charm's claimed
 # architectures.
 #
 # The network half (`gather_resource_architectures_network`, below) adds the
-# coarser charm-level architecture cross-check PLAN.md's 2026-08-02
-# network-access design note found the public Charmhub API can support - the
+# coarser charm-level architecture cross-check that the public Charmhub API
+# can support - the
 # per-arch *resource-revision* data this item was originally written to want
 # sits behind Charmhub's authenticated publisher API and stays out of reach
-# with or without this. Per that note, this does not unlock a PASS/FAIL
+# with or without this. So this does not unlock a PASS/FAIL
 # branch the local-only gate doesn't already have - it only strengthens the
 # NEEDS_HUMAN rationale, naming what Charmhub confirms and what it can't.
 
@@ -2561,11 +2561,10 @@ def _resolve_charmhub_name(source: CharmSource) -> str:
     `charmcraft.yaml`'s own `name:` first; a legacy standalone
     `metadata.yaml`'s `name:` as a fallback for charms that have not
     migrated the field over yet - the same gap `evaluate.py`'s
-    `metadata_links` and item 8 already have (`FOLLOWUPS-LOG.md`'s
-    2026-07-31 entry). Never the repository name: per PLAN.md's
-    network-access design note, five of this project's seven validation
-    charms have a Charmhub name that differs from their GitHub repo name, so
-    guessing from the repo would be wrong more often than not.
+    `metadata_links` and item 8 already have. Never the repository name:
+    five of the seven real charms this was validated against have a
+    Charmhub name that differs from their GitHub repo name, so guessing
+    from the repo would be wrong more often than not.
     """
     charmcraft = source.charmcraft_yaml()
     name = charmcraft.get('name')
@@ -2759,8 +2758,8 @@ resource_architectures = ItemCheck(
 # libraries the repository *publishes* - the same scoping
 # `first_party_python_files` already applies everywhere else in this module,
 # just intersected with the library-only subtree rather than every
-# first-party file. See PLAN.md's design note for the real-charm evidence
-# behind both the scoping and the AST pattern below.
+# first-party file. Both the scoping and the AST pattern below come from
+# reading real charms' vendored charmlibs.
 
 
 @dataclasses.dataclass
@@ -2778,9 +2777,9 @@ class _StatusMutationVisitor(ast.NodeVisitor):
     Real mutation sites vary in how many attributes come before ``unit``/
     ``app`` - ``self.unit.status``, ``self.model.unit.status``,
     ``self.model.app.status``, ``self.charm.unit.status`` are all real,
-    live examples found across this project's vendored charmlibs (see
-    PLAN.md). Only the last two attributes of the assignment target matter,
-    the same "receiver name varies too much to match on" reasoning
+    live examples found in real charms' vendored charmlibs. Only the last
+    two attributes of the assignment target matter, the same "receiver name
+    varies too much to match on" reasoning
     `_add_container_exec` already uses for ``container.exec``.
     """
 
@@ -2912,9 +2911,9 @@ library_status_mutation = ItemCheck(
 # in the live best-practices.txt), the same precedent item 23's
 # `charmcraft-yaml-key-resources` set.
 #
-# See PLAN.md's design note for why "documentation and website resolve to
-# the same domain" is the one confident violation shape this check can name
-# without positively confirming a documentation link's content: it rules out
+# "documentation and website resolve to the same domain" is the one
+# confident violation shape this check can name without positively
+# confirming a documentation link's content: it rules out
 # "documentation is just pointing back at the vendor's own site", it does
 # not rule in "this is definitely charm-specific content".
 
@@ -3012,7 +3011,7 @@ documentation_link = ItemCheck(
 
 # --- charmcraft-yaml-key-config ---------------------------------------------
 
-# See PLAN.md's "Item 28" design note. Thin gate, item 23's tier: the one
+# Thin gate, item 23's tier: the one
 # real signal this batch's real-charm data found - config options declared
 # with no `default` key - does not license a confident FAIL, since Juju
 # does not enforce a "required" option even when `default` is absent;
