@@ -1263,6 +1263,30 @@ class TestSummaryDescription:
 
 
 class TestLoggingNotPrint:
+    def test_a_failure_rationale_keeps_the_case_of_later_words(self):
+        from charmhub_listing_review.item_checks import _sentence
+
+        assert _sentence('2 calls to Juju; and TLS') == '2 calls to Juju; and TLS.'
+        assert _sentence('print() was found') == 'Print() was found.'
+
+    def test_each_file_is_parsed_once(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        import ast
+
+        parse = ast.parse
+        calls: list[str] = []
+
+        def counting_parse(source: str) -> ast.Module:
+            calls.append('parse')
+            return parse(source)
+
+        monkeypatch.setattr(ast, 'parse', counting_parse)
+        logging_not_print.gather(
+            _source(tmp_path, **{'src/charm.py': 'print("hi")\n', 'src/other.py': 'x = 1\n'})
+        )
+        assert len(calls) == 2
+
     def test_no_print_no_commands_passes(self, tmp_path: pathlib.Path):
         assessment = logging_not_print.assess(
             _source(tmp_path, **{'src/charm.py': 'import ops\nlogger.info("hi")\n'})
@@ -1292,7 +1316,7 @@ class TestLoggingNotPrint:
         assert 'output' in assessment.rationale
 
     def test_uncaptured_container_exec_fails(self, tmp_path: pathlib.Path):
-        """The exact shape AI-ITEM-VALIDATION.md's item 10 correction is about."""
+        """A Pebble charm can run commands with no subprocess call at all."""
         assessment = logging_not_print.assess(
             _source(
                 tmp_path,
@@ -1518,6 +1542,23 @@ class TestSensitiveLogging:
 
 
 class TestResourceArchitectures:
+    def test_named_platforms_report_their_build_for_architectures(self, tmp_path: pathlib.Path):
+        charmcraft = (
+            'name: my-charm\n'
+            'platforms:\n'
+            '  my-platform:\n'
+            '    build-on: [ubuntu@24.04:amd64]\n'
+            '    build-for: [ubuntu@24.04:arm64]\n'
+            '  ubuntu@24.04:amd64:\n'
+            'resources:\n  tool:\n    type: file\n    filename: tool.bin\n'
+        )
+        assessment = resource_architectures.assess(
+            _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        )
+        assert 'claims to support: arm64' in assessment.evidence
+        assert 'claims to support: amd64' in assessment.evidence
+        assert not any('my-platform' in line for line in assessment.evidence)
+
     def test_no_resources_is_not_applicable(self, tmp_path: pathlib.Path):
         assessment = resource_architectures.assess(
             _source(tmp_path, **{'charmcraft.yaml': 'name: my-charm\n'})

@@ -496,18 +496,38 @@ def _check_program(site: _ExecSite, program: str) -> None:
         site.problems.append(f'runs {program!r} by a relative name rather than an absolute path')
 
 
-def gather_exec_sites(source: CharmSource) -> Evidence:
-    """Collect every place the charm starts an external process."""
-    charm_path = source.charm_path
-    sites: list[_ExecSite] = []
+def _parse_first_party(source: CharmSource) -> tuple[list[tuple[str, ast.Module]], list[str]]:
+    """Parse the charm's first-party Python once.
+
+    Returns each parsed file as ``(path relative to the charm, tree)``, and the
+    relative paths of the files that couldn't be parsed.
+    """
+    parsed: list[tuple[str, ast.Module]] = []
     unparsed: list[str] = []
-    for path in first_party_python_files(charm_path, source.charm_name):
-        relative = path.relative_to(charm_path).as_posix()
+    for path in first_party_python_files(source.charm_path, source.charm_name):
+        relative = path.relative_to(source.charm_path).as_posix()
         try:
-            tree = ast.parse(path.read_text(encoding='utf-8', errors='replace'))
+            parsed.append((
+                relative,
+                ast.parse(path.read_text(encoding='utf-8', errors='replace')),
+            ))
         except (SyntaxError, ValueError):
             unparsed.append(relative)
-            continue
+    return parsed, unparsed
+
+
+def gather_exec_sites(
+    source: CharmSource,
+    parsed: tuple[list[tuple[str, ast.Module]], list[str]] | None = None,
+) -> Evidence:
+    """Collect every place the charm starts an external process.
+
+    ``parsed`` is the result of ``_parse_first_party``, for an item that has
+    already parsed the charm and wants these sites too.
+    """
+    trees, unparsed = parsed if parsed is not None else _parse_first_party(source)
+    sites: list[_ExecSite] = []
+    for relative, tree in trees:
         visitor = _ExecVisitor(relative)
         visitor.visit(tree)
         sites.extend(visitor.sites)
@@ -2051,11 +2071,10 @@ pin_workload_versions = ItemCheck(
 # values for `summary` and `description` - that is not this item's to build.
 # What is left is the quality comparison between the two, which
 # `metadata_links` never makes: does `description` actually say more than
-# `summary`, or is it the same sentence reworded? See AI-ITEM-VALIDATION.md's
-# "Item 8" section and PLAN.md's design note for the real example this is
-# calibrated on (`forgejo-k8s`: summary "Charmed Kubernetes operator for
+# `summary`, or is it the same sentence reworded? The real example this is
+# calibrated on is `forgejo-k8s`: summary "Charmed Kubernetes operator for
 # Forgejo.", description "Deploy and configure the software forge,
-# Forgejo." - barely longer, and not meaningfully more informative).
+# Forgejo." - barely longer, and not meaningfully more informative.
 
 _WORD_RE = re.compile(r"[a-z0-9']+")
 
@@ -2166,6 +2185,14 @@ summary_description = ItemCheck(
 )
 
 
+def _sentence(clause: str) -> str:
+    """Capitalise the first letter and add a full stop, leaving the rest alone.
+
+    ``str.capitalize()`` would lowercase the rest, mangling names like Juju.
+    """
+    return f'{clause[:1].upper()}{clause[1:]}.'
+
+
 # --- best-practice-use-logging-not-print ---------------------------------
 
 # Upstream text: "avoid `print()` calls, and ensure that any subprocess calls
@@ -2178,10 +2205,9 @@ summary_description = ItemCheck(
 #   'does not capture output, so it leaks into the Juju log' problem string
 #   for `subprocess.run`, and the `captures` field that same evidence now
 #   carries for `container.exec` sites (added above specifically for this
-#   item - see the `_ExecSite.captures` docstring - since a charm that runs
-#   everything through Pebble has zero `subprocess` calls and the earlier
-#   check only knew about `subprocess`, see AI-ITEM-VALIDATION.md's "Item 10
-#   is looking in the wrong place" note).
+#   item - see the `_ExecSite.captures` docstring). A charm that runs
+#   everything through Pebble has no `subprocess` calls at all, so a check
+#   that only looked at `subprocess` would be looking in the wrong place.
 
 
 class _PrintVisitor(ast.NodeVisitor):
@@ -2199,22 +2225,17 @@ class _PrintVisitor(ast.NodeVisitor):
 
 def gather_logging_not_print(source: CharmSource) -> Evidence:
     """Collect print() call sites, and read capture status off exec-site evidence."""
+    parsed = _parse_first_party(source)
+    trees, unparsed = parsed
     prints: list[str] = []
-    unparsed: list[str] = []
-    for path in first_party_python_files(source.charm_path, source.charm_name):
-        relative = path.relative_to(source.charm_path).as_posix()
-        try:
-            tree = ast.parse(path.read_text(encoding='utf-8', errors='replace'))
-        except (SyntaxError, ValueError):
-            unparsed.append(relative)
-            continue
+    for relative, tree in trees:
         visitor = _PrintVisitor(relative)
         visitor.visit(tree)
         prints.extend(visitor.locations)
 
-    exec_evidence = gather_exec_sites(source)
+    exec_evidence = gather_exec_sites(source, parsed)
     sites: list[_ExecSite] = exec_evidence.data.get('sites', [])
-    unparsed = sorted(set(unparsed) | set(exec_evidence.data.get('unparsed', [])))
+    unparsed = sorted(unparsed)
 
     uncaptured: list[str] = []
     undecidable_capture: list[str] = []
@@ -2270,7 +2291,7 @@ def decide_logging_not_print(evidence: Evidence) -> ItemAssessment:
         return ItemAssessment(
             checklist_id=checklist_id,
             verdict=Verdict.FAIL,
-            rationale=f'{"; and ".join(failures)}.'.capitalize(),
+            rationale=_sentence('; and '.join(failures)),
             evidence=evidence.lines,
         )
 
@@ -2319,9 +2340,9 @@ logging_not_print = ItemCheck(
 
 # --- best-practice-no-sensitive-data-in-logs ------------------------------
 
-# AI-ITEM-VALIDATION.md's "Item 12 found a real violation" section is the
-# design brief: `forgejo-k8s`'s src/charm.py logged a whole database relation
-# databag at logger.debug immediately before reading the password out of it.
+# This is built from a real violation: `forgejo-k8s`'s src/charm.py logged a
+# whole database relation databag at logger.debug immediately before reading
+# the password out of it.
 # Three shapes are what credentials actually leak through and are greppable:
 # a whole relation databag, the charm's own `self.config` mapping, or
 # `os.environ`. This is deliberately not a general secret-scanner - logging
@@ -2524,7 +2545,7 @@ sensitive_logging = ItemCheck(
 
 # --- charmcraft-yaml-key-resources -----------------------------------------
 
-# Deliberately thin - see PLAN.md's "Item 23" design note. The only evidence
+# Deliberately thin. The only evidence
 # that lives in the repository is whether the item applies at all: a
 # `type: file` resource declared in `charmcraft.yaml`. Whether that resource
 # actually has a revision published for every architecture the charm claims
@@ -2541,13 +2562,19 @@ def _platform_architectures(charmcraft: dict[str, Any]) -> list[str]:
     """Architectures the charm claims to support, from `platforms:`.
 
     A platform key is either a bare architecture (``amd64``) or
-    ``<base>@<version>:<arch>``; only the part after the last ``:`` is the
-    architecture.
+    ``<base>@<version>:<arch>``, and only the part after the last ``:`` is the
+    architecture. A platform can also have a name of the author's choosing,
+    with its architectures under ``build-for``, so that is read when present.
     """
     platforms = charmcraft.get('platforms')
     if not isinstance(platforms, dict):
         return []
-    return sorted({str(key).rsplit(':', 1)[-1] for key in platforms})
+    architectures: set[str] = set()
+    for key, definition in platforms.items():
+        build_for = definition.get('build-for') if isinstance(definition, dict) else None
+        targets = build_for if isinstance(build_for, list) else [build_for or key]
+        architectures.update(str(target).rsplit(':', 1)[-1] for target in targets)
+    return sorted(architectures)
 
 
 def gather_resource_architectures(source: CharmSource) -> Evidence:
@@ -2574,10 +2601,11 @@ def gather_resource_architectures(source: CharmSource) -> Evidence:
 def decide_resource_architectures(evidence: Evidence) -> ItemAssessment:
     """Rule on binary-resource architecture coverage - as far as it can be judged.
 
-    Whether each declared `file` resource has a published revision for every
-    claimed architecture is a Charmhub-only fact this check has no way to
-    read; see the module comment above. What is free: whether the item
-    applies at all.
+    This is a placeholder, not a finished item. Whether each declared `file`
+    resource has a published revision for every claimed architecture is a
+    Charmhub-only fact, and this check can't read it until `ItemCheck` can
+    make a network call; see the module comment above. Until then it never
+    passes or fails. What is free: whether the item applies at all.
     """
     checklist_id = 'charmcraft-yaml-key-resources'
     file_resources: list[str] = evidence.data.get('file_resources', [])
