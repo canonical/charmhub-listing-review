@@ -2347,6 +2347,19 @@ class _LoggingVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+def _is_app_or_unit(key: ast.expr) -> bool:
+    """Whether a ``.data[...]`` key looks like an app or unit.
+
+    ``.data`` on its own is too common an attribute name to mean a relation (an
+    HTTP response, a dataclass wrapper, anything holding a payload). What makes
+    it a databag is being keyed by an app or unit: ``self.app``,
+    ``event.unit``, ``self.model.app``, or a local called ``app`` or ``unit``.
+    """
+    if isinstance(key, ast.Attribute):
+        return key.attr in ('app', 'unit')
+    return isinstance(key, ast.Name) and key.id in ('app', 'unit')
+
+
 def _classify_sensitive(node: ast.expr) -> str | None:
     """Which of the three known-sensitive shapes ``node`` is, if any.
 
@@ -2361,7 +2374,11 @@ def _classify_sensitive(node: ast.expr) -> str | None:
         return None
     if isinstance(node, ast.Subscript):
         value = node.value
-        if isinstance(value, ast.Attribute) and value.attr == 'data':
+        if (
+            isinstance(value, ast.Attribute)
+            and value.attr == 'data'
+            and _is_app_or_unit(node.slice)
+        ):
             return 'a relation databag (`.data[...]`)'
         return None
     if isinstance(node, ast.Attribute):

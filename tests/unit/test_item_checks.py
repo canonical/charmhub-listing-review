@@ -1367,6 +1367,25 @@ class TestSensitiveLogging:
         assert assessment.verdict is Verdict.FAIL
         assert any('fetch_relation_data' in line for line in assessment.evidence)
 
+    @pytest.mark.parametrize(
+        'expression',
+        [
+            'relation.data[event.app]',
+            'self.model.relations["db"][0].data[self.app]',
+            'relation.data[unit]',
+        ],
+    )
+    def test_databags_keyed_by_an_app_or_unit_fail(self, tmp_path: pathlib.Path, expression: str):
+        assessment = sensitive_logging.assess(
+            _source(tmp_path, **{'src/charm.py': f'logger.debug("data: %s", {expression})\n'})
+        )
+        assert assessment.verdict is Verdict.FAIL
+
+    def test_some_other_data_attribute_is_not_a_databag(self, tmp_path: pathlib.Path):
+        source = "def handle(response):\n    logger.debug('items: %s', response.data['items'])\n"
+        assessment = sensitive_logging.assess(_source(tmp_path, **{'src/charm.py': source}))
+        assert assessment.verdict is not Verdict.FAIL
+
     def test_logging_a_relation_databag_subscript_fails(self, tmp_path: pathlib.Path):
         assessment = sensitive_logging.assess(
             _source(
