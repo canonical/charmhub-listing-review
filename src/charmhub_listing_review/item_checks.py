@@ -2099,10 +2099,23 @@ def _normalise_words(text: str) -> list[str]:
 
 
 def gather_summary_description(source: CharmSource) -> Evidence:
-    """Collect the summary and description strings, nothing else."""
+    """Collect the summary and description strings, nothing else.
+
+    A charm that predates unified ``charmcraft.yaml`` keeps them in
+    ``metadata.yaml``, so that is read for whichever one ``charmcraft.yaml``
+    doesn't have.
+    """
     charmcraft = source.charmcraft_yaml()
-    summary = str(charmcraft.get('summary') or '')
-    description = str(charmcraft.get('description') or '')
+    metadata: dict[str, Any] = {}
+    metadata_path = source.charm_path / 'metadata.yaml'
+    if metadata_path.is_file():
+        try:
+            loaded = yaml.safe_load(metadata_path.read_text(encoding='utf-8', errors='replace'))
+        except (yaml.YAMLError, OSError):
+            loaded = None
+        metadata = loaded if isinstance(loaded, dict) else {}
+    summary = str(charmcraft.get('summary') or metadata.get('summary') or '')
+    description = str(charmcraft.get('description') or metadata.get('description') or '')
     lines = []
     if summary:
         lines.append(f'summary: {summary}')

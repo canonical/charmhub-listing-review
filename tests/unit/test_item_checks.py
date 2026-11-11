@@ -1252,6 +1252,23 @@ class TestSummaryDescription:
         )
         assert assessment.verdict is Verdict.NEEDS_HUMAN
 
+    def test_legacy_metadata_yaml_is_read(self, tmp_path: pathlib.Path):
+        assessment = summary_description.assess(
+            _source(
+                tmp_path,
+                **{
+                    'charmcraft.yaml': 'type: charm\n',
+                    'metadata.yaml': (
+                        'name: my-charm\n'
+                        'summary: Charmed Kubernetes operator for Forgejo.\n'
+                        'description: Deploy and configure the software forge, Forgejo.\n'
+                    ),
+                },
+            )
+        )
+        assert assessment.verdict is Verdict.FAIL
+        assert any(line.startswith('summary: Charmed') for line in assessment.evidence)
+
     def test_missing_description_needs_a_human(self, tmp_path: pathlib.Path):
         assessment = summary_description.assess(
             _source(tmp_path, **{'charmcraft.yaml': 'name: my-charm\nsummary: Foo.\n'})
