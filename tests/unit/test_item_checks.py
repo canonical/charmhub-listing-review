@@ -1538,6 +1538,13 @@ class TestLibraryStatusMutation:
         )
         assert assessment.verdict is Verdict.FAIL
 
+    def test_an_annotated_assignment_is_a_mutation(self, tmp_path: pathlib.Path):
+        source = 'self.unit.status: ops.StatusBase = ops.ActiveStatus()\n'
+        assessment = library_status_mutation.assess(
+            _source(tmp_path, **{'lib/charms/my_charm/v0/my_lib.py': source})
+        )
+        assert assessment.verdict is Verdict.FAIL
+
     def test_status_on_some_other_name_is_not_a_mutation(self, tmp_path: pathlib.Path):
         assessment = library_status_mutation.assess(
             _source(

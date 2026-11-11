@@ -2608,6 +2608,11 @@ class _StatusMutationVisitor(ast.NodeVisitor):
         self._check_targets([node.target], node)
         self.generic_visit(node)
 
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if node.value is not None:
+            self._check_targets([node.target], node)
+        self.generic_visit(node)
+
 
 def _own_library_files(source: CharmSource) -> list[pathlib.Path]:
     """The Python files under the charm's own published ``lib/charms/`` tree."""
