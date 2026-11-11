@@ -3024,11 +3024,30 @@ documentation_link = ItemCheck(
 
 
 def gather_config_defaults(source: CharmSource) -> Evidence:
-    """Collect declared config options and which of them have no `default` key."""
+    """Collect declared config options and which of them have no `default` key.
+
+    Options can be in ``charmcraft.yaml`` or in a legacy standalone
+    ``config.yaml``, so both are read and merged, ``charmcraft.yaml`` winning
+    a name declared in both. A charm with only ``config.yaml`` is not a charm
+    without options.
+    """
     charmcraft = source.charmcraft_yaml()
     config = charmcraft.get('config')
-    options = config.get('options') if isinstance(config, dict) else None
-    options = options if isinstance(options, dict) else {}
+    found = config.get('options') if isinstance(config, dict) else None
+    options: dict[str, Any] = dict(found) if isinstance(found, dict) else {}
+
+    unread: list[str] = []
+    config_path = source.charm_path / 'config.yaml'
+    if config_path.is_file():
+        try:
+            legacy = yaml.safe_load(config_path.read_text(encoding='utf-8', errors='replace'))
+        except (yaml.YAMLError, OSError):
+            legacy = None
+            unread.append('config.yaml: could not be parsed as YAML')
+        found = legacy.get('options') if isinstance(legacy, dict) else None
+        if isinstance(found, dict):
+            for name, definition in found.items():
+                options.setdefault(name, definition)
 
     missing_default = sorted(
         str(name)
@@ -3041,6 +3060,7 @@ def gather_config_defaults(source: CharmSource) -> Evidence:
     return Evidence(
         lines=lines,
         data={'total_options': len(options), 'missing_default': missing_default},
+        unread=unread,
     )
 
 

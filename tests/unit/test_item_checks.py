@@ -1867,6 +1867,37 @@ class TestConfigDefaults:
         assessment = config_defaults.assess(_source(tmp_path, **{'charmcraft.yaml': charmcraft}))
         assert assessment.verdict is Verdict.NOT_APPLICABLE
 
+    def test_options_in_legacy_config_yaml_are_read(self, tmp_path: pathlib.Path):
+        """A charm with its options only in `config.yaml` is not a charm without options."""
+        files = {
+            'charmcraft.yaml': 'name: my-charm\n',
+            'config.yaml': 'options:\n  admin-password:\n    type: string\n',
+        }
+        assessment = config_defaults.assess(_source(tmp_path, **files))
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert 'admin-password' in assessment.rationale
+
+    def test_charmcraft_yaml_wins_an_option_declared_in_both(self, tmp_path: pathlib.Path):
+        files = {
+            'charmcraft.yaml': (
+                'name: my-charm\n'
+                'config:\n  options:\n    log-level:\n      type: string\n      default: info\n'
+            ),
+            'config.yaml': (
+                'options:\n  log-level:\n    type: string\n  admin-password:\n    type: string\n'
+            ),
+        }
+        assessment = config_defaults.assess(_source(tmp_path, **files))
+        assert any('2 config option(s)' in line for line in assessment.evidence)
+        assert 'admin-password' in assessment.rationale
+        assert 'log-level' not in assessment.rationale
+
+    def test_unparseable_config_yaml_is_not_settled(self, tmp_path: pathlib.Path):
+        files = {'charmcraft.yaml': 'name: my-charm\n', 'config.yaml': 'options: [unclosed\n'}
+        assessment = config_defaults.assess(_source(tmp_path, **files))
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert any('config.yaml' in line for line in assessment.evidence)
+
     def test_options_missing_a_default_need_a_human_not_a_fail(self, tmp_path: pathlib.Path):
         """PLAN.md's design note is explicit: Juju does not enforce a required option, so a
 
