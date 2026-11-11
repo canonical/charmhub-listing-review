@@ -1602,39 +1602,52 @@ class TestDocumentationLink:
         )
         assert assessment.verdict is Verdict.NOT_APPLICABLE
 
-    def test_documentation_matching_website_domain_fails(self, tmp_path: pathlib.Path):
+    @pytest.mark.parametrize(
+        'documentation,website',
+        [
+            ('https://example.com', 'https://example.com'),
+            ('https://www.example.com/', 'http://example.com'),
+            ('https://example.com/#top', 'https://Example.com'),
+        ],
+    )
+    def test_documentation_that_is_the_website_fails(
+        self, tmp_path: pathlib.Path, documentation: str, website: str
+    ):
         """The violation shape the item describes: documentation is just the app's own site."""
         charmcraft = (
             'name: my-charm\n'
             'links:\n'
-            '  documentation: https://example.com/docs\n'
-            '  website:\n    - https://example.com\n'
+            f'  documentation: {documentation}\n'
+            f'  website:\n    - {website}\n'
         )
         assessment = documentation_link.assess(
             _source(tmp_path, **{'charmcraft.yaml': charmcraft})
         )
         assert assessment.verdict is Verdict.FAIL
-        assert 'example.com' in assessment.rationale
+        assert 'same page' in assessment.rationale
 
-    def test_documentation_matching_website_with_www_prefix_fails(self, tmp_path: pathlib.Path):
+    @pytest.mark.parametrize(
+        'documentation,website',
+        [
+            # Charm documentation on the same host as the charm's website.
+            ('https://charmhub.io/my-charm/docs', 'https://charmhub.io/my-charm'),
+            (
+                'https://github.com/canonical/my-charm/blob/main/README.md',
+                'https://github.com/canonical/my-charm',
+            ),
+            ('https://example.com/docs', 'https://example.com'),
+            # The real forgejo-k8s shape: the repo's README, on another host.
+            ('https://github.com/canonical/my-charm/blob/main/README.md', 'https://example.org'),
+        ],
+    )
+    def test_documentation_elsewhere_needs_a_human(
+        self, tmp_path: pathlib.Path, documentation: str, website: str
+    ):
         charmcraft = (
             'name: my-charm\n'
             'links:\n'
-            '  documentation: https://www.example.com/docs\n'
-            '  website:\n    - https://example.com\n'
-        )
-        assessment = documentation_link.assess(
-            _source(tmp_path, **{'charmcraft.yaml': charmcraft})
-        )
-        assert assessment.verdict is Verdict.FAIL
-
-    def test_documentation_on_a_different_domain_needs_a_human(self, tmp_path: pathlib.Path):
-        """The real forgejo-k8s shape: documentation is the repo's own README, not the app's."""
-        charmcraft = (
-            'name: my-charm\n'
-            'links:\n'
-            '  documentation: https://github.com/canonical/my-charm/blob/main/README.md\n'
-            '  website:\n    - https://example.org\n'
+            f'  documentation: {documentation}\n'
+            f'  website:\n    - {website}\n'
         )
         assessment = documentation_link.assess(
             _source(tmp_path, **{'charmcraft.yaml': charmcraft})

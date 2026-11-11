@@ -2718,10 +2718,17 @@ def _link_value(links: dict[str, Any], key: str) -> str:
     return str(value or '')
 
 
-def _domain(url: str) -> str:
-    """The registrable-ish domain of a URL, for a cheap same-site comparison."""
-    host = urlparse(url).netloc.lower()
-    return host.removeprefix('www.')
+def _normalise_url(url: str) -> str:
+    """A URL reduced to what decides whether two links are the same page.
+
+    The scheme, a ``www.`` prefix, a trailing slash and any fragment are
+    dropped, and the host is lowercased. The path and query are kept.
+    """
+    parsed = urlparse(url.strip())
+    host = parsed.netloc.lower().removeprefix('www.')
+    path = parsed.path.rstrip('/')
+    query = f'?{parsed.query}' if parsed.query else ''
+    return f'{host}{path}{query}'
 
 
 def gather_documentation_link(source: CharmSource) -> Evidence:
@@ -2743,13 +2750,13 @@ def gather_documentation_link(source: CharmSource) -> Evidence:
 def decide_documentation_link(evidence: Evidence) -> ItemAssessment:
     """Rule on whether `documentation` looks like it is really `website`.
 
-    One confident branch: `documentation` and `website` resolve to the same
-    domain, which means `documentation` is not pointing anywhere different
-    from the charmed application's own site. Everything else - no
-    `documentation` link at all, or one that is on a different domain from
-    `website` (or there is no `website` to compare against) - defers, per
-    the module's standing rule that a check should not guess a PASS it
-    cannot back up.
+    One confident branch: `documentation` is the same page as `website`, so
+    it can't be anything more charm-specific than the site itself. Sharing a
+    host isn't enough. `charmhub.io/my-charm/docs` and
+    `github.com/<org>/<charm>/blob/main/README.md` are charm documentation on
+    the same host as the charm's website, so anything short of the same page
+    defers, per the module's standing rule that a check should not guess
+    what it cannot back up.
     """
     checklist_id = 'charmcraft-yaml-key-documentation'
     documentation: str = evidence.data.get('documentation', '')
@@ -2762,21 +2769,20 @@ def decide_documentation_link(evidence: Evidence) -> ItemAssessment:
             rationale='The charm declares no `documentation` link.',
         )
 
-    documentation_domain = _domain(documentation)
-    if website and documentation_domain and documentation_domain == _domain(website):
+    if website and _normalise_url(documentation) == _normalise_url(website):
         return ItemAssessment(
             checklist_id=checklist_id,
             verdict=Verdict.FAIL,
             rationale=(
-                f'`documentation` ({documentation}) and `website` ({website}) resolve to the '
-                f'same domain, so `documentation` does not look like charm-specific content.'
+                f'`documentation` ({documentation}) is the same page as `website` '
+                f'({website}), so it is not charm-specific documentation.'
             ),
             evidence=evidence.lines,
         )
 
     if website:
         rationale = (
-            f'`documentation` ({documentation}) is on a different domain than `website` '
+            f'`documentation` ({documentation}) is a different page from `website` '
             f'({website}); whether its content is actually about the charm still needs a '
             f'human to check.'
         )
