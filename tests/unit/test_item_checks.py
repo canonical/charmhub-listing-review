@@ -1596,6 +1596,27 @@ class TestResourceArchitecturesNetwork:
         assert assessment.verdict is Verdict.NEEDS_HUMAN
         assert 'not for arm64' in assessment.rationale
 
+    def test_charmhub_all_covers_every_claimed_architecture(self, tmp_path: pathlib.Path):
+        """Charmhub reports an architecture-independent revision as `all`."""
+        source = _source(tmp_path, **{'charmcraft.yaml': _CHARMCRAFT_WITH_FILE_RESOURCE})
+        url = _CHARMHUB_URL_TEMPLATE.format(name='my-charm')
+        fetcher = FixtureFetcher({
+            url: {'channel-map': [{'revision': {'bases': [{'architecture': 'all'}]}}]}
+        })
+        assessment = resource_architectures.assess(source, fetcher=fetcher)
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert 'not for' not in assessment.rationale
+        assert 'published for every claimed architecture (all)' in assessment.rationale
+
+    def test_rationale_says_published_spans_every_channel(self, tmp_path: pathlib.Path):
+        source = _source(tmp_path, **{'charmcraft.yaml': _CHARMCRAFT_WITH_FILE_RESOURCE})
+        url = _CHARMHUB_URL_TEMPLATE.format(name='my-charm')
+        fetcher = FixtureFetcher({
+            url: {'channel-map': [{'revision': {'bases': [{'architecture': 'amd64'}]}}]}
+        })
+        assessment = resource_architectures.assess(source, fetcher=fetcher)
+        assert 'across every channel' in assessment.rationale
+
     def test_named_platform_is_read_from_build_for(self, tmp_path: pathlib.Path):
         """A platform key is an arbitrary name once the platform has a definition."""
         charmcraft = (

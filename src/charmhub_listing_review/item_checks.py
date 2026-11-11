@@ -2684,7 +2684,8 @@ def decide_resource_architectures(evidence: Evidence) -> ItemAssessment:
     if published is not None:
         published_str = ', '.join(published) if published else 'no architectures'
         if architectures and architectures_complete:
-            missing = sorted(set(architectures) - set(published))
+            # Charmhub reports an architecture-independent revision as `all`.
+            missing = [] if 'all' in published else sorted(set(architectures) - set(published))
             if missing:
                 charmhub_note = (
                     f' Charmhub confirms the charm itself is published for {published_str}, but '
@@ -2700,6 +2701,11 @@ def decide_resource_architectures(evidence: Evidence) -> ItemAssessment:
                 )
         else:
             charmhub_note = f' Charmhub shows the charm itself published for {published_str}.'
+        if published:
+            charmhub_note += (
+                ' The published architectures are collected across every channel, including '
+                'old tracks, so they show what was ever published, not what is current.'
+            )
     elif lookup_failed:
         charmhub_note = (
             ' A Charmhub lookup for a charm-level architecture cross-check did not return a '
