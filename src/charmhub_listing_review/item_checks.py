@@ -3054,12 +3054,22 @@ def gather_config_defaults(source: CharmSource) -> Evidence:
         for name, definition in options.items()
         if isinstance(definition, dict) and 'default' not in definition
     )
+    # An option with no body (`log-level:`) or a scalar one parses, but there is
+    # nothing to inspect, so it is unread rather than counted as having a default.
+    malformed = sorted(
+        str(name) for name, definition in options.items() if not isinstance(definition, dict)
+    )
+    unread.extend(f'config option {name}: not a mapping' for name in malformed)
 
     lines = [f'{len(options)} config option(s) declared']
     lines.extend(f'{name}: no `default` key' for name in missing_default)
     return Evidence(
         lines=lines,
-        data={'total_options': len(options), 'missing_default': missing_default},
+        data={
+            'total_options': len(options),
+            'missing_default': missing_default,
+            'malformed': malformed,
+        },
         unread=unread,
     )
 
@@ -3078,6 +3088,7 @@ def decide_config_defaults(evidence: Evidence) -> ItemAssessment:
     checklist_id = 'charmcraft-yaml-key-config'
     total_options: int = evidence.data.get('total_options', 0)
     missing_default: list[str] = evidence.data.get('missing_default', [])
+    malformed: list[str] = evidence.data.get('malformed', [])
 
     if not total_options:
         return ItemAssessment(
@@ -3094,17 +3105,30 @@ def decide_config_defaults(evidence: Evidence) -> ItemAssessment:
             f'even without a default, so whether that is a deliberate design choice or a gap '
             f'needs a human look.'
         )
+    elif malformed:
+        rationale = (
+            f'The charm declares {total_options} config option(s), and every one that could be '
+            f'read has a `default` key; whether config is exposed only when necessary, and '
+            f'whether zero-config deploy is the intended default, still needs a human look.'
+        )
     else:
         rationale = (
             f'The charm declares {total_options} config option(s), all with a `default` key; '
             f'whether config is exposed only when necessary, and whether zero-config deploy is '
             f'the intended default, still needs a human look.'
         )
+    # `assess` only caps a verdict that isn't already NEEDS_HUMAN, so the
+    # unread inputs have to be named here or they never reach the reviewer.
+    if evidence.unread:
+        rationale += (
+            f' {len(evidence.unread)} input(s) could not be read '
+            f'({"; ".join(evidence.unread)}), so this is not the full picture.'
+        )
     return ItemAssessment(
         checklist_id=checklist_id,
         verdict=Verdict.NEEDS_HUMAN,
         rationale=rationale,
-        evidence=evidence.lines,
+        evidence=evidence.lines + evidence.unread,
     )
 
 

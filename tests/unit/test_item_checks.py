@@ -1892,6 +1892,31 @@ class TestConfigDefaults:
         assert 'admin-password' in assessment.rationale
         assert 'log-level' not in assessment.rationale
 
+    @pytest.mark.parametrize('body', ['', ' info', ' [a, b]'])
+    def test_option_without_a_mapping_is_unread_not_defaulted(
+        self, tmp_path: pathlib.Path, body: str
+    ):
+        charmcraft = f'name: my-charm\nconfig:\n  options:\n    log-level:{body}\n'
+        assessment = config_defaults.assess(_source(tmp_path, **{'charmcraft.yaml': charmcraft}))
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert 'all with a `default` key' not in assessment.rationale
+        assert 'config option log-level: not a mapping' in assessment.rationale
+        assert 'config option log-level: not a mapping' in assessment.evidence
+
+    def test_unparseable_config_yaml_is_named_alongside_charmcraft_options(
+        self, tmp_path: pathlib.Path
+    ):
+        """With options already in `charmcraft.yaml` the verdict is NEEDS_HUMAN anyway."""
+        files = {
+            'charmcraft.yaml': (
+                'name: my-charm\n'
+                'config:\n  options:\n    log-level:\n      type: string\n      default: info\n'
+            ),
+            'config.yaml': 'options: [unclosed\n',
+        }
+        assessment = config_defaults.assess(_source(tmp_path, **files))
+        assert 'config.yaml: could not be parsed' in assessment.rationale
+
     def test_unparseable_config_yaml_is_not_settled(self, tmp_path: pathlib.Path):
         files = {'charmcraft.yaml': 'name: my-charm\n', 'config.yaml': 'options: [unclosed\n'}
         assessment = config_defaults.assess(_source(tmp_path, **files))
