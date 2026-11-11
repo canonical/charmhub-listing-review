@@ -2542,16 +2542,12 @@ resource_architectures = ItemCheck(
 
 # --- best-practice-libraries-no-status-mutation ---------------------------
 
-# AI-ITEM-VALIDATION.md's "Item 15 needs scoping or it fails every charm"
-# section is the whole design: judged against every file under `lib/`, this
-# item fails almost any charm on code its author did not write - a charm
-# typically vendors far more third-party charmlibs than it publishes its
-# own. Scoped to `lib/charms/<this charm's name>/` - the library or
-# libraries the repository *publishes* - the same scoping
-# `first_party_python_files` already applies everywhere else in this module,
-# just intersected with the library-only subtree rather than every
-# first-party file. See PLAN.md's design note for the real-charm evidence
-# behind both the scoping and the AST pattern below.
+# Judged against every file under `lib/`, this item would fail almost any
+# charm on code its author did not write, because a charm typically vendors
+# far more third-party charmlibs than it publishes. So it is scoped to
+# `lib/charms/<this charm's name>/`, the library or libraries the repository
+# *publishes*. That is the same scoping `first_party_python_files` applies
+# everywhere else in this module, intersected with the library-only subtree.
 
 
 @dataclasses.dataclass
@@ -2615,10 +2611,16 @@ class _StatusMutationVisitor(ast.NodeVisitor):
 
 
 def _own_library_files(source: CharmSource) -> list[pathlib.Path]:
-    """The Python files under the charm's own published ``lib/charms/`` tree."""
+    """The Python files under the charm's own published ``lib/charms/`` tree.
+
+    Without a name, no library looks like the charm's own, and the item
+    would say the charm publishes none. So when the source doesn't carry
+    one, the name comes from ``charmcraft.yaml``.
+    """
+    charm_name = source.charm_name or str(source.charmcraft_yaml().get('name') or '')
     return [
         path
-        for path in first_party_python_files(source.charm_path, source.charm_name)
+        for path in first_party_python_files(source.charm_path, charm_name)
         if path.relative_to(source.charm_path).parts[:2] == _LIB_CHARMS
     ]
 
@@ -2654,6 +2656,8 @@ def decide_library_status_mutation(evidence: Evidence) -> ItemAssessment:
     unparsed: list[str] = evidence.data.get('unparsed', [])
     own_library_file_count: int = evidence.data.get('own_library_file_count', 0)
 
+    # A mutation that was found is a failure whatever else went unread, so
+    # it is ruled on before the unparsed files are.
     if mutations:
         return ItemAssessment(
             checklist_id=checklist_id,
@@ -2706,19 +2710,14 @@ library_status_mutation = ItemCheck(
 
 # --- charmcraft-yaml-key-documentation --------------------------------------
 
-# This item's evidence, like item 23's and item 25's, is not one of
-# canonical/operator's best-practice admonitions with a `:name:` anchor - it
-# is charmcraft's own `links` file-reference page. The checklist_id below is
-# this module's own placeholder, reusing the referenced sphinx target name
-# verbatim (`{external+charmcraft:ref}` links <charmcraft-yaml-key-documentation>``
-# in the live best-practices.txt), the same precedent item 23's
-# `charmcraft-yaml-key-resources` set.
+# The checklist_id is Charmcraft's own reference target for the key, as for
+# item 23: this item points at Charmcraft's `links` reference, which has no
+# best-practice `:name:` anchor of its own.
 #
-# See PLAN.md's design note for why "documentation and website resolve to
-# the same domain" is the one confident violation shape this check can name
-# without positively confirming a documentation link's content: it rules out
-# "documentation is just pointing back at the vendor's own site", it does
-# not rule in "this is definitely charm-specific content".
+# The one confident violation is a `documentation` link that is the same page
+# as a `website`. That rules out "documentation just points back at the
+# site", but it doesn't rule in "this is charm-specific content", so nothing
+# here passes.
 
 
 def _link_values(links: dict[str, Any], key: str) -> list[str]:

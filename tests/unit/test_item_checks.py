@@ -1519,9 +1519,28 @@ class TestLibraryStatusMutation:
             )
         )
         assert assessment.verdict is Verdict.FAIL
-        assert '.unit.status' in assessment.rationale or 'unit or application status' in (
-            assessment.rationale
+        assert any('sets .unit.status' in line for line in assessment.evidence)
+
+    def test_own_library_augmenting_app_status_fails(self, tmp_path: pathlib.Path):
+        assessment = library_status_mutation.assess(
+            _source(
+                tmp_path,
+                **{'lib/charms/my_charm/v0/my_lib.py': 'self.app.status += suffix\n'},
+            )
         )
+        assert assessment.verdict is Verdict.FAIL
+        assert any('sets .app.status' in line for line in assessment.evidence)
+
+    def test_the_charm_name_comes_from_charmcraft_yaml_if_not_given(self, tmp_path: pathlib.Path):
+        _charm(
+            tmp_path,
+            **{
+                'charmcraft.yaml': 'name: my-charm\n',
+                'lib/charms/my_charm/v0/my_lib.py': 'self.unit.status = BlockedStatus("x")\n',
+            },
+        )
+        assessment = library_status_mutation.assess(CharmSource(charm_path=tmp_path))
+        assert assessment.verdict is Verdict.FAIL
 
     @pytest.mark.parametrize(
         'source',
