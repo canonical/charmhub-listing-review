@@ -14,7 +14,10 @@
 
 """Tests for the per-item source-reading checks."""
 
+import http.client
+import json
 import pathlib
+from unittest import mock
 
 import pytest
 
@@ -25,6 +28,7 @@ from charmhub_listing_review.item_checks import (
     Evidence,
     FixtureFetcher,
     ItemCheck,
+    LiveFetcher,
     automated_releasing,
     avoid_charm_plugin,
     config_defaults,
@@ -1914,3 +1918,28 @@ class TestConfigDefaults:
 
     def test_registered_under_its_checklist_id(self):
         assert ITEM_CHECKS['charmcraft-yaml-key-config'] is config_defaults
+
+
+class TestLiveFetcher:
+    def test_reads_json(self, tmp_path: pathlib.Path):
+        path = tmp_path / 'info.json'
+        path.write_text(json.dumps({'name': 'my-charm'}))
+        assert LiveFetcher().get_json(path.as_uri()) == {'name': 'my-charm'}
+
+    @pytest.mark.parametrize('url', ['not a url', 'file:///no/such/file', 'nope://example.com'])
+    def test_bad_url_is_none(self, url: str):
+        assert LiveFetcher().get_text(url) is None
+        assert LiveFetcher().get_json(url) is None
+
+    def test_non_object_json_is_none(self, tmp_path: pathlib.Path):
+        path = tmp_path / 'info.json'
+        path.write_text('[1, 2]')
+        assert LiveFetcher().get_json(path.as_uri()) is None
+
+    @pytest.mark.parametrize(
+        'error', [http.client.IncompleteRead(b'partial'), http.client.BadStatusLine('nope')]
+    )
+    def test_http_protocol_error_is_none(self, error: http.client.HTTPException):
+        """Not an `OSError`, so it needs catching separately."""
+        with mock.patch('urllib.request.urlopen', side_effect=error):
+            assert LiveFetcher().get_text('https://api.charmhub.io/v2/charms/info/x') is None

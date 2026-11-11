@@ -25,6 +25,7 @@ against the listing requirements before submitting a listing request.
 
 import fnmatch
 import hashlib
+import http.client
 import math
 import pathlib
 import re
@@ -32,7 +33,6 @@ import shutil
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import tempfile
 import tomllib
-import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET  # ruff: ignore[suspicious-xml-etree-import]
 from typing import Any
@@ -49,7 +49,7 @@ def _url_ok(url: str, *, method: str = 'HEAD', timeout: int = 5) -> bool:
         with urllib.request.urlopen(request, timeout=timeout) as response:  # ruff: ignore[suspicious-url-open-usage]
             # file:// responses have no status; a successful urlopen means the file exists.
             return response.status is None or response.status < 400
-    except (urllib.error.URLError, OSError, ValueError):
+    except (OSError, http.client.HTTPException, ValueError):
         return False
 
 
@@ -61,7 +61,7 @@ def _fetch_url(url: str, *, timeout: int = 5) -> str | None:
             if response.status is not None and response.status >= 400:
                 return None
             return response.read().decode('utf-8', errors='replace')
-    except (urllib.error.URLError, OSError, ValueError):
+    except (OSError, http.client.HTTPException, ValueError):
         return None
 
 

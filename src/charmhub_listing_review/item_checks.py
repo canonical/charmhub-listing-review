@@ -57,10 +57,10 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import http.client
 import json
 import pathlib
 import re
-import urllib.error
 import urllib.request
 from collections.abc import Callable
 from typing import Any, Protocol
@@ -227,8 +227,9 @@ class LiveFetcher:
 
     Mirrors ``evaluate.py``'s own ``_fetch_url`` exactly rather than
     inventing a second HTTP approach for the same codebase: ``urllib``, a 5s
-    timeout, every error (``URLError``, ``OSError``, ``ValueError``) caught
-    and turned into ``None`` rather than raised. A ``Fetcher`` failure must
+    timeout, every error (``OSError``, which covers ``URLError``,
+    ``http.client.HTTPException`` and ``ValueError``) caught and turned into
+    ``None`` rather than raised. A ``Fetcher`` failure must
     never, by itself, license a ``FAIL`` - see PLAN.md's network-access
     design note's failure-mode table.
     """
@@ -246,7 +247,7 @@ class LiveFetcher:
                 if response.status is not None and response.status >= 400:
                     return None
                 return response.read().decode('utf-8', errors='replace')
-        except (urllib.error.URLError, OSError, ValueError):
+        except (OSError, http.client.HTTPException, ValueError):
             return None
 
     def get_json(self, url: str) -> dict[str, Any] | None:

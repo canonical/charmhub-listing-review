@@ -14,6 +14,7 @@
 
 """Test the automated criteria evaluation."""
 
+import http.client
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
 from unittest import mock
 
@@ -246,6 +247,16 @@ def test_coding_conventions(mock_url_ok, status, expected):
         '* [ ] The quality assurance pipeline of a charm should be automated '
         'using a continuous integration (CI) system.'
     )
+
+
+@pytest.mark.parametrize(
+    'error', [http.client.IncompleteRead(b'partial'), http.client.BadStatusLine('nope')]
+)
+def test_url_helpers_treat_http_protocol_errors_as_failure(error):
+    """`HTTPException` is not an `OSError`, so it needs catching separately."""
+    with mock.patch('urllib.request.urlopen', side_effect=error):
+        assert evaluate._fetch_url('https://example.com/LICENSE') is None
+        assert evaluate._url_ok('https://example.com/') is False
 
 
 @mock.patch('charmhub_listing_review.evaluate._fetch_url')
