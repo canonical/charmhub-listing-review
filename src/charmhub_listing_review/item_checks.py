@@ -2475,17 +2475,51 @@ sensitive_logging = ItemCheck(
 # NEEDS_HUMAN rationale, naming what Charmhub confirms and what it can't.
 
 
-def _platform_architectures(charmcraft: dict[str, Any]) -> list[str]:
+# craft_platforms.DebianArchitecture, the architectures charmcraft accepts.
+_DEBIAN_ARCHITECTURES = frozenset({
+    'amd64',
+    'arm64',
+    'armhf',
+    'i386',
+    'ppc64el',
+    'riscv64',
+    's390x',
+})
+
+
+def _arch_of(target: object) -> str | None:
+    """The architecture in ``amd64`` or ``<base>@<version>:<arch>``, if it is one."""
+    arch = str(target).rsplit(':', 1)[-1]
+    return arch if arch in _DEBIAN_ARCHITECTURES else None
+
+
+def _platform_architectures(charmcraft: dict[str, Any]) -> tuple[list[str], bool]:
     """Architectures the charm claims to support, from `platforms:`.
 
-    A platform key is either a bare architecture (``amd64``) or
-    ``<base>@<version>:<arch>``; only the part after the last ``:`` is the
-    architecture.
+    Returns the architectures, and whether every platform's architecture could
+    be read. A platform with a definition builds for whatever its `build-for`
+    names, and its key is an arbitrary name (``noble-amd64``, ``jammy``), so
+    the key is only read when there is no definition: shorthand keys are a
+    bare architecture (``amd64``) or ``<base>@<version>:<arch>``.
     """
     platforms = charmcraft.get('platforms')
     if not isinstance(platforms, dict):
-        return []
-    return sorted({str(key).rsplit(':', 1)[-1] for key in platforms})
+        return [], True
+    architectures: set[str] = set()
+    complete = True
+    for key, definition in platforms.items():
+        if isinstance(definition, dict):
+            build_for = definition.get('build-for')
+            targets = build_for if isinstance(build_for, list) else [build_for]
+        else:
+            targets = [key]
+        for target in targets:
+            arch = _arch_of(target)
+            if arch is None:
+                complete = False
+            else:
+                architectures.add(arch)
+    return sorted(architectures), complete
 
 
 def gather_resource_architectures(source: CharmSource) -> Evidence:
@@ -2499,13 +2533,19 @@ def gather_resource_architectures(source: CharmSource) -> Evidence:
         for name, definition in resources.items()
         if isinstance(definition, dict) and definition.get('type') == 'file'
     )
-    architectures = _platform_architectures(charmcraft)
+    architectures, architectures_complete = _platform_architectures(charmcraft)
 
     lines = [f'{name}: `type: file` resource' for name in file_resources]
     lines.extend(f'claims to support: {arch}' for arch in architectures)
+    if not architectures_complete:
+        lines.append('`platforms`: at least one platform names no architecture that could be read')
     return Evidence(
         lines=lines,
-        data={'file_resources': file_resources, 'architectures': architectures},
+        data={
+            'file_resources': file_resources,
+            'architectures': architectures,
+            'architectures_complete': architectures_complete,
+        },
     )
 
 
@@ -2626,6 +2666,7 @@ def decide_resource_architectures(evidence: Evidence) -> ItemAssessment:
     checklist_id = 'charmcraft-yaml-key-resources'
     file_resources: list[str] = evidence.data.get('file_resources', [])
     architectures: list[str] = evidence.data.get('architectures', [])
+    architectures_complete: bool = evidence.data.get('architectures_complete', True)
     published: list[str] | None = evidence.data.get('published_architectures')
     lookup_failed: bool = evidence.data.get('charmhub_lookup_failed', False)
     name_unresolved: bool = evidence.data.get('charmhub_name_unresolved', False)
@@ -2642,7 +2683,7 @@ def decide_resource_architectures(evidence: Evidence) -> ItemAssessment:
     charmhub_note = ''
     if published is not None:
         published_str = ', '.join(published) if published else 'no architectures'
-        if architectures:
+        if architectures and architectures_complete:
             missing = sorted(set(architectures) - set(published))
             if missing:
                 charmhub_note = (
@@ -2670,7 +2711,15 @@ def decide_resource_architectures(evidence: Evidence) -> ItemAssessment:
             '`charmcraft.yaml` or `metadata.yaml`.'
         )
 
-    if architectures:
+    if not architectures_complete:
+        claimed = f'claims to support {", ".join(architectures)} and ' if architectures else ''
+        rationale = (
+            f'The charm declares {len(file_resources)} `type: file` resource(s) ({names}), '
+            f'{claimed}has at least one platform whose architecture could not be read from '
+            f'`charmcraft.yaml`; whether each resource has a published revision for every '
+            f'architecture can only be checked on Charmhub.' + charmhub_note
+        )
+    elif architectures:
         archs = ', '.join(architectures)
         rationale = (
             f'The charm declares {len(file_resources)} `type: file` resource(s) ({names}) and '

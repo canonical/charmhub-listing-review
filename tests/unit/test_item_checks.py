@@ -1591,6 +1591,56 @@ class TestResourceArchitecturesNetwork:
         assert assessment.verdict is Verdict.NEEDS_HUMAN
         assert 'not for arm64' in assessment.rationale
 
+    def test_named_platform_is_read_from_build_for(self, tmp_path: pathlib.Path):
+        """A platform key is an arbitrary name once the platform has a definition."""
+        charmcraft = (
+            'name: my-charm\n'
+            'resources:\n'
+            '  lxd-binary:\n    type: file\n    filename: lxd\n    description: The LXD binary\n'
+            'platforms:\n'
+            '  noble-amd64:\n'
+            '    build-on: [ubuntu@24.04:amd64]\n'
+            '    build-for: [ubuntu@24.04:amd64]\n'
+        )
+        source = _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        url = _CHARMHUB_URL_TEMPLATE.format(name='my-charm')
+        fetcher = FixtureFetcher({
+            url: {'channel-map': [{'revision': {'bases': [{'architecture': 'amd64'}]}}]}
+        })
+        assessment = resource_architectures.assess(source, fetcher=fetcher)
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert 'published for every claimed architecture (amd64)' in assessment.rationale
+        assert 'noble-amd64' not in assessment.rationale
+
+    @pytest.mark.parametrize(
+        'platform',
+        [
+            '  jammy:\n    build-on: [ubuntu@22.04:amd64]\n',
+            '  jammy:\n    build-on: [ubuntu@22.04:amd64]\n    build-for: [ubuntu@22.04:all]\n',
+            '  noble-amd64:\n',
+        ],
+    )
+    def test_unreadable_platform_names_no_mismatch(self, tmp_path: pathlib.Path, platform: str):
+        """When a platform's architecture can't be read, don't claim Charmhub is missing it."""
+        charmcraft = (
+            'name: my-charm\n'
+            'resources:\n'
+            '  lxd-binary:\n    type: file\n    filename: lxd\n    description: The LXD binary\n'
+            'platforms:\n  ubuntu@24.04:arm64:\n' + platform
+        )
+        source = _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        url = _CHARMHUB_URL_TEMPLATE.format(name='my-charm')
+        fetcher = FixtureFetcher({
+            url: {'channel-map': [{'revision': {'bases': [{'architecture': 'amd64'}]}}]}
+        })
+        assessment = resource_architectures.assess(source, fetcher=fetcher)
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert 'not for' not in assessment.rationale
+        assert 'every claimed architecture' not in assessment.rationale
+        assert 'claims to support arm64' in assessment.rationale
+        assert 'could not be read' in assessment.rationale
+        assert 'Charmhub shows the charm itself published for amd64' in assessment.rationale
+
     def test_charmhub_lookup_failure_is_needs_human_not_fail(self, tmp_path: pathlib.Path):
         source = _source(tmp_path, **{'charmcraft.yaml': _CHARMCRAFT_WITH_FILE_RESOURCE})
         fetcher = FixtureFetcher()  # empty - every get_json() misses, same as a network error
