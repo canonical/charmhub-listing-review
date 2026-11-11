@@ -64,7 +64,7 @@ import re
 import urllib.request
 from collections.abc import Callable
 from typing import Any, Protocol
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import yaml
 
@@ -2641,7 +2641,7 @@ def gather_resource_architectures_network(source: CharmSource, fetcher: Fetcher)
             data={'charmhub_name_unresolved': True},
         )
 
-    payload = fetcher.get_json(_CHARMHUB_INFO_URL.format(name=name))
+    payload = fetcher.get_json(_CHARMHUB_INFO_URL.format(name=quote(name, safe='')))
     if payload is None:
         return Evidence(
             lines=[f'Charmhub lookup for `{name}` did not return a result'],

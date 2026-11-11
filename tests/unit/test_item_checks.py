@@ -1685,6 +1685,14 @@ class TestResourceArchitecturesNetwork:
         assessment = resource_architectures.assess(source, fetcher=fetcher)
         assert 'published for every claimed architecture' in assessment.rationale
 
+    def test_name_is_quoted_into_the_url(self, tmp_path: pathlib.Path):
+        """The name comes from a third party's repository, so it can't reshape the request."""
+        charmcraft = _CHARMCRAFT_WITH_FILE_RESOURCE.replace('name: my-charm', 'name: "a/b?c#d"')
+        source = _source(tmp_path, **{'charmcraft.yaml': charmcraft})
+        fetcher = _SpyFetcher(FixtureFetcher())
+        resource_architectures.assess(source, fetcher=fetcher)
+        assert fetcher.requested == [_CHARMHUB_URL_TEMPLATE.format(name='a%2Fb%3Fc%23d')]
+
     def test_unresolvable_name_is_needs_human_not_fail(self, tmp_path: pathlib.Path):
         charmcraft = (
             'resources:\n'
