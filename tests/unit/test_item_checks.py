@@ -228,6 +228,27 @@ class TestSafeSubprocess:
         )
         assert assessment.verdict is Verdict.NEEDS_HUMAN
 
+    def test_a_parameter_is_not_resolved_through_another_function(self, tmp_path: pathlib.Path):
+        """`argv` here is run's parameter, not build's local."""
+        source = (
+            'def build():\n'
+            "    argv = ['sh', '-c', 'echo hi']\n"
+            '    return argv\n'
+            'def run(container, argv):\n'
+            '    return container.exec(argv).wait_output()\n'
+        )
+        assessment = _assess(tmp_path, **{'src/charm.py': source})
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+
+    def test_a_module_level_command_is_still_followed(self, tmp_path: pathlib.Path):
+        source = (
+            "ARGV = ['sh', '-c', 'echo hi']\n"
+            'def run(container):\n'
+            '    return container.exec(ARGV).wait_output()\n'
+        )
+        assessment = _assess(tmp_path, **{'src/charm.py': source})
+        assert assessment.verdict is Verdict.FAIL
+
     def test_command_built_elsewhere_needs_a_human(self, tmp_path: pathlib.Path):
         assessment = _assess(
             tmp_path,
@@ -1385,6 +1406,41 @@ class TestSensitiveLogging:
         source = "def handle(response):\n    logger.debug('items: %s', response.data['items'])\n"
         assessment = sensitive_logging.assess(_source(tmp_path, **{'src/charm.py': source}))
         assert assessment.verdict is not Verdict.FAIL
+
+    def test_a_parameter_is_not_resolved_through_another_method(self, tmp_path: pathlib.Path):
+        """`data` in _report is its own parameter, not _read's databag."""
+        source = (
+            'class C:\n'
+            '    def _read(self, relation):\n'
+            '        data = relation.data[self.app]\n'
+            "        return data['endpoint']\n"
+            '\n'
+            '    def _report(self, data):\n'
+            "        logger.info('progress: %s', data)\n"
+        )
+        assessment = sensitive_logging.assess(_source(tmp_path, **{'src/charm.py': source}))
+        assert assessment.verdict is not Verdict.FAIL
+
+    def test_a_local_is_not_resolved_into_a_nested_function(self, tmp_path: pathlib.Path):
+        source = (
+            'def outer(relation, self):\n'
+            '    def inner():\n'
+            '        data = relation.data[self.app]\n'
+            "        return data['x']\n"
+            "    data = {'progress': 1}\n"
+            "    logger.info('%s', data)\n"
+        )
+        assessment = sensitive_logging.assess(_source(tmp_path, **{'src/charm.py': source}))
+        assert assessment.verdict is not Verdict.FAIL
+
+    def test_a_databag_in_the_same_function_is_still_followed(self, tmp_path: pathlib.Path):
+        source = (
+            'def f(self, relation):\n'
+            '    data = relation.data[self.app]\n'
+            "    logger.info('%s', data)\n"
+        )
+        assessment = sensitive_logging.assess(_source(tmp_path, **{'src/charm.py': source}))
+        assert assessment.verdict is Verdict.FAIL
 
     def test_logging_a_relation_databag_subscript_fails(self, tmp_path: pathlib.Path):
         assessment = sensitive_logging.assess(

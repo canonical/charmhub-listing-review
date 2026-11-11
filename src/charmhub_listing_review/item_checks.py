@@ -239,7 +239,7 @@ class _ExecVisitor(ast.NodeVisitor):
         # because there the outer wait_output() call is the statement.
         self._discarded: set[int] = set()
         # Local names that hold a literal command, innermost scope last.
-        self._scopes: list[dict[str, ast.expr]] = []
+        self._scopes: list[dict[str, ast.expr | None]] = []
         # id(exec call node) -> 'wait_output' or 'wait', for
         # `container.exec(...).wait_output()`-shaped chains. Populated when
         # the outer .wait_output()/.wait() call is visited, which happens
@@ -247,50 +247,35 @@ class _ExecVisitor(ast.NodeVisitor):
         self._exec_capture: dict[int, str] = {}
 
     def visit_Module(self, node: ast.Module) -> None:
-        self._visit_scope(node, node.body)
+        self._visit_scope(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        self._visit_scope(node, node.body)
+        self._visit_scope(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        self._visit_scope(node, node.body)
+        self._visit_scope(node)
 
-    def _visit_scope(self, node: ast.AST, body: list[ast.stmt]) -> None:
-        self._push_scope(body)
-        self.generic_visit(node)
-        self._scopes.pop()
-
-    def _push_scope(self, body: list[ast.stmt]) -> None:
-        """Record names assigned exactly once from a literal in this scope.
+    def _visit_scope(self, node: _Scope) -> None:
+        """Record the names this scope binds, keeping only literal commands.
 
         Charms routinely build the command a line or two before running it
         (``argv = ['su', 'git', '-c', cmd]``), so refusing to look through a
         local would defer most real call sites to a human. Resolving only
         single-assignment literals keeps that conservative: a name that is
-        reassigned, or built by a call, stays unresolved.
+        reassigned, built by a call, or a parameter stays unresolved.
         """
-        assigned: dict[str, list[ast.expr]] = {}
-        for statement in ast.walk(ast.Module(body=body, type_ignores=[])):
-            if not isinstance(statement, ast.Assign):
-                continue
-            for target in statement.targets:
-                if isinstance(target, ast.Name):
-                    assigned.setdefault(target.id, []).append(statement.value)
         self._scopes.append({
-            name: values[0]
-            for name, values in assigned.items()
-            if len(values) == 1
-            and isinstance(values[0], (ast.List, ast.Tuple, ast.Constant, ast.JoinedStr))
+            name: value
+            if isinstance(value, (ast.List, ast.Tuple, ast.Constant, ast.JoinedStr))
+            else None
+            for name, value in _local_bindings(node).items()
         })
+        self.generic_visit(node)
+        self._scopes.pop()
 
     def _resolve(self, node: ast.AST | None) -> ast.AST | None:
         """Follow a local name to the literal it was assigned, if it is one."""
-        if not isinstance(node, ast.Name):
-            return node
-        for scope in reversed(self._scopes):
-            if node.id in scope:
-                return scope[node.id]
-        return node
+        return _resolve_name(self._scopes, node)
 
     def visit_Expr(self, node: ast.Expr) -> None:
         if isinstance(node.value, ast.Call):
@@ -368,6 +353,88 @@ class _ExecVisitor(ast.NodeVisitor):
 
 def _is_name(node: ast.AST, name: str) -> bool:
     return isinstance(node, ast.Name) and node.id == name
+
+
+_Scope = ast.Module | ast.FunctionDef | ast.AsyncFunctionDef
+
+# Nodes that open a scope of their own, so their bindings aren't the
+# enclosing scope's.
+_NESTED_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+
+
+def _local_bindings(scope: _Scope) -> dict[str, ast.expr | None]:
+    """The names a module or function binds, and what each one resolves to.
+
+    A name maps to the value it was assigned only if a single plain assignment
+    is the one thing that binds it in this scope. Anything else (a parameter,
+    a name bound twice, a loop or ``with`` target, an import) maps to None.
+    It is still recorded, because a local binding shadows the same name in
+    an enclosing scope, and resolving past it would read another function's
+    variable. Nested functions and classes are not walked into, for the same
+    reason.
+    """
+    counts: dict[str, int] = {}
+    values: dict[str, list[ast.expr]] = {}
+
+    def bind(name: str) -> None:
+        counts[name] = counts.get(name, 0) + 1
+
+    if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        arguments = scope.args
+        for argument in (
+            *arguments.posonlyargs,
+            *arguments.args,
+            *arguments.kwonlyargs,
+            arguments.vararg,
+            arguments.kwarg,
+        ):
+            if argument is not None:
+                # Counted twice so a parameter is never resolved, even if
+                # the body also assigns it once.
+                bind(argument.arg)
+                bind(argument.arg)
+
+    stack: list[ast.AST] = list(scope.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, _NESTED_SCOPES):
+            if not isinstance(node, ast.Lambda):
+                bind(node.name)
+            continue
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            bind(node.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                bind((alias.asname or alias.name).split('.')[0])
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            bind(node.name)
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    values.setdefault(target.id, []).append(node.value)
+        stack.extend(ast.iter_child_nodes(node))
+
+    return {
+        name: values[name][0] if count == 1 and len(values.get(name, [])) == 1 else None
+        for name, count in counts.items()
+    }
+
+
+def _resolve_name(
+    scopes: list[dict[str, ast.expr | None]], node: ast.AST | None
+) -> ast.AST | None:
+    """Follow a name to its value through the enclosing scopes, innermost first.
+
+    The innermost scope that binds the name decides: if it can't be resolved
+    there, the name itself comes back rather than an outer scope's value.
+    """
+    if not isinstance(node, ast.Name):
+        return node
+    for scope in reversed(scopes):
+        if node.id in scope:
+            value = scope[node.id]
+            return node if value is None else value
+    return node
 
 
 def _is_exec_call(node: ast.AST) -> bool:
@@ -2292,41 +2359,25 @@ class _LoggingVisitor(ast.NodeVisitor):
         self._path = relative_path
         self.findings: list[_LogFinding] = []
         self.call_count = 0
-        self._scopes: list[dict[str, ast.expr]] = []
+        self._scopes: list[dict[str, ast.expr | None]] = []
 
     def visit_Module(self, node: ast.Module) -> None:
-        self._visit_scope(node, node.body)
+        self._visit_scope(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        self._visit_scope(node, node.body)
+        self._visit_scope(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        self._visit_scope(node, node.body)
+        self._visit_scope(node)
 
-    def _visit_scope(self, node: ast.AST, body: list[ast.stmt]) -> None:
-        self._push_scope(body)
+    def _visit_scope(self, node: _Scope) -> None:
+        self._scopes.append(_local_bindings(node))
         self.generic_visit(node)
         self._scopes.pop()
 
-    def _push_scope(self, body: list[ast.stmt]) -> None:
-        assigned: dict[str, list[ast.expr]] = {}
-        for statement in ast.walk(ast.Module(body=body, type_ignores=[])):
-            if not isinstance(statement, ast.Assign):
-                continue
-            for target in statement.targets:
-                if isinstance(target, ast.Name):
-                    assigned.setdefault(target.id, []).append(statement.value)
-        self._scopes.append({
-            name: values[0] for name, values in assigned.items() if len(values) == 1
-        })
-
     def _resolve(self, node: ast.expr) -> ast.expr:
-        if not isinstance(node, ast.Name):
-            return node
-        for scope in reversed(self._scopes):
-            if node.id in scope:
-                return scope[node.id]
-        return node
+        resolved = _resolve_name(self._scopes, node)
+        return resolved if isinstance(resolved, ast.expr) else node
 
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
