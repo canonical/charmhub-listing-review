@@ -2569,10 +2569,12 @@ class _StatusMutationVisitor(ast.NodeVisitor):
     Real mutation sites vary in how many attributes come before ``unit``/
     ``app`` - ``self.unit.status``, ``self.model.unit.status``,
     ``self.model.app.status``, ``self.charm.unit.status`` are all real,
-    live examples found across this project's vendored charmlibs (see
-    PLAN.md). Only the last two attributes of the assignment target matter,
-    the same "receiver name varies too much to match on" reasoning
-    `_add_container_exec` already uses for ``container.exec``.
+    live examples found across this project's vendored charmlibs. Only the
+    last two names in the assignment target matter, the same "receiver name
+    varies too much to match on" reasoning `_add_container_exec` already
+    uses for ``container.exec``. The ``unit``/``app`` part can also be a bare
+    name (``unit.status = ...``), which is how a library that's handed the
+    unit as a parameter, or pulls it into a local, writes it.
     """
 
     def __init__(self, relative_path: str):
@@ -2581,16 +2583,20 @@ class _StatusMutationVisitor(ast.NodeVisitor):
 
     def _check_targets(self, targets: list[ast.expr], node: ast.AST) -> None:
         for target in targets:
-            if (
-                isinstance(target, ast.Attribute)
-                and target.attr == 'status'
-                and isinstance(target.value, ast.Attribute)
-                and target.value.attr in ('unit', 'app')
-            ):
+            if not (isinstance(target, ast.Attribute) and target.attr == 'status'):
+                continue
+            owner = target.value
+            if isinstance(owner, ast.Attribute):
+                receiver = owner.attr
+            elif isinstance(owner, ast.Name):
+                receiver = owner.id
+            else:
+                continue
+            if receiver in ('unit', 'app'):
                 self.mutations.append(
                     _StatusMutation(
                         location=f'{self._path}:{getattr(node, "lineno", 0)}',
-                        receiver=target.value.attr,
+                        receiver=receiver,
                     )
                 )
 

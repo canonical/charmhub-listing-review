@@ -1523,6 +1523,30 @@ class TestLibraryStatusMutation:
             assessment.rationale
         )
 
+    @pytest.mark.parametrize(
+        'source',
+        [
+            'def set_blocked(unit):\n    unit.status = BlockedStatus("x")\n',
+            'def f(self):\n    app = self._charm.app\n    app.status = BlockedStatus("x")\n',
+        ],
+    )
+    def test_own_library_setting_status_on_a_bare_name_fails(
+        self, tmp_path: pathlib.Path, source: str
+    ):
+        assessment = library_status_mutation.assess(
+            _source(tmp_path, **{'lib/charms/my_charm/v0/my_lib.py': source})
+        )
+        assert assessment.verdict is Verdict.FAIL
+
+    def test_status_on_some_other_name_is_not_a_mutation(self, tmp_path: pathlib.Path):
+        assessment = library_status_mutation.assess(
+            _source(
+                tmp_path,
+                **{'lib/charms/my_charm/v0/my_lib.py': 'job.status = "done"\n'},
+            )
+        )
+        assert assessment.verdict is not Verdict.FAIL
+
     def test_own_library_setting_app_status_via_model_fails(self, tmp_path: pathlib.Path):
         """The `self.model.app.status = ...` shape rolling_ops uses - a longer chain."""
         assessment = library_status_mutation.assess(
