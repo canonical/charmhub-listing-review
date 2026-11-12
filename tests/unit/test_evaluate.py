@@ -410,6 +410,31 @@ def test_charm_has_icon_missing_is_optional(tmp_path):
 
 
 @pytest.mark.parametrize(
+    'svg',
+    [
+        '<svg width="200mm" height="200mm"></svg>',
+        '<svg width="100%" height="100%"></svg>',
+        '<svg viewBox="0 0 wide tall"></svg>',
+        '<svg viewBox="0 0"></svg>',
+    ],
+)
+def test_charm_has_icon_unsupported_size(tmp_path, svg):
+    """Non-pixel or malformed sizes fail the check rather than crashing."""
+    (tmp_path / 'icon.svg').write_text(svg)
+    result = evaluate.charm_has_icon(tmp_path)
+    assert result.passed is False
+    assert 'error' in result.context
+
+
+def test_charm_has_icon_px_units_and_comma_viewbox(tmp_path):
+    icon = tmp_path / 'icon.svg'
+    icon.write_text('<svg width="100px" height="100px"></svg>')
+    assert evaluate.charm_has_icon(tmp_path).passed is True
+    icon.write_text('<svg viewBox="0,0,100,100"></svg>')
+    assert evaluate.charm_has_icon(tmp_path).passed is True
+
+
+@pytest.mark.parametrize(
     'parts,expected_checked',
     [
         # No parts declared: charmcraft defaults to the `charm` plugin.
