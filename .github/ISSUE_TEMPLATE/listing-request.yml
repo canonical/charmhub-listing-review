@@ -33,7 +33,7 @@ body:
     id: Charm-Directory
     attributes:
       label: "Charm Directory"
-      description: "For repos with more than one charm: the relative path to the charm directory within the repository (e.g. charms/my-charm). Leave empty if the charm is at the repository root."
+      description: "If the charm isn't at the repository root: the relative path to the charm's directory within the repository (e.g. charm or charms/my-charm), not a URL. Leave empty if the charm is at the repository root."
       placeholder: "charms/my-charm"
     validations:
       required: false
@@ -71,9 +71,9 @@ body:
       required: true
 
   - type: input
-    id: Default-Branch
+    id: Review-Branch
     attributes:
-      label: "Default Branch"
+      label: "Review Branch"
       description: "If the review should not be against the default branch, specify the correct branch here. Leave blank to use the default branch (typically 'main')."
       placeholder: "26.04"
     validations:

@@ -152,7 +152,7 @@ class _IssueData(TypedDict):
     ci_release_url: str
     ci_integration_url: str
     documentation_link: str
-    default_branch: str
+    review_branch: str
     contribution_link: str
     license_link: str
     security_link: str
@@ -174,32 +174,36 @@ def get_details_from_issue(issue_number: int, repo: str | None = None):
     )
     body = json.loads(result.stdout)['body']
 
-    # Define the fields to extract and their headings.
-    fields = {
-        'name': '### Charm name',
-        'demo_url': '### Demo',
-        'project_repo': '### Project Repository',
-        'charm_dir': '### Charm Directory',
-        'ci_linting': '### CI Linting',
-        'ci_release_url': '### CI Release',
-        'ci_integration_url': '### CI Integration Tests',
-        'documentation_link': '### Documentation Link',
-        'default_branch': '### Review Branch',
+    # Define the fields to extract and their headings. Where a field has more than one heading,
+    # the first one found is used.
+    fields: dict[str, tuple[str, ...]] = {
+        'name': ('### Charm name',),
+        'demo_url': ('### Demo',),
+        'project_repo': ('### Project Repository',),
+        'charm_dir': ('### Charm Directory',),
+        'ci_linting': ('### CI Linting',),
+        'ci_release_url': ('### CI Release',),
+        'ci_integration_url': ('### CI Integration Tests',),
+        'documentation_link': ('### Documentation Link',),
+        # Requests filed before the field was relabelled use the old heading.
+        'review_branch': ('### Review Branch', '### Default Branch'),
     }
 
     # Extract values for each field.
     issue_data: dict[str, str | None] = {}
-    for key, heading in fields.items():
-        pattern = rf'{re.escape(heading)}\s*\n([^\n]*)'
-        match = re.search(pattern, body)
-        if match:
-            value = match.group(1).strip()
-            issue_data[key] = value
-        else:
-            issue_data[key] = None
+    for key, headings in fields.items():
+        issue_data[key] = None
+        for heading in headings:
+            pattern = rf'{re.escape(heading)}\s*\n([^\n]*)'
+            match = re.search(pattern, body)
+            if match:
+                value = match.group(1).strip()
+                # GitHub fills in optional fields that are left blank with this placeholder.
+                issue_data[key] = None if value == '_No response_' else value
+                break
 
     # Default charm_dir to '.' if not provided or empty.
-    if not issue_data.get('charm_dir') or issue_data['charm_dir'] == '_No response_':
+    if not issue_data.get('charm_dir'):
         issue_data['charm_dir'] = '.'
 
     # These have expected filenames, so we use those rather than require the author provide them.
@@ -208,13 +212,13 @@ def get_details_from_issue(issue_number: int, repo: str | None = None):
     project_repo = issue_data['project_repo']
     if not project_repo:
         raise ValueError('Issue body is missing the "Project Repository" field.')
-    default_branch = issue_data.get('default_branch') or get_default_branch(str(project_repo))
-    issue_data['default_branch'] = default_branch
+    review_branch = issue_data.get('review_branch') or get_default_branch(str(project_repo))
+    issue_data['review_branch'] = review_branch
     issue_data['contribution_link'] = (
-        f'{issue_data["project_repo"]}/blob/{default_branch}/CONTRIBUTING.md'
+        f'{issue_data["project_repo"]}/blob/{review_branch}/CONTRIBUTING.md'
     )
-    issue_data['license_link'] = f'{issue_data["project_repo"]}/blob/{default_branch}/LICENSE'
-    issue_data['security_link'] = f'{issue_data["project_repo"]}/blob/{default_branch}/SECURITY.md'
+    issue_data['license_link'] = f'{issue_data["project_repo"]}/blob/{review_branch}/LICENSE'
+    issue_data['security_link'] = f'{issue_data["project_repo"]}/blob/{review_branch}/SECURITY.md'
 
     return cast('_IssueData', issue_data)
 
@@ -357,7 +361,7 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
         issue_data['contribution_link'],
         issue_data['license_link'],
         issue_data['security_link'],
-        issue_data['default_branch'],
+        issue_data['review_branch'],
         charm_dir=issue_data.get('charm_dir', '.'),
     )
     passed_ids = {r.checklist_id for r in evaluation.checks if r.checklist_id and r.passed is True}

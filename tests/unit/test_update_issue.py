@@ -20,6 +20,8 @@ import urllib.error
 from typing import cast
 from unittest import mock
 
+import yaml
+
 import charmhub_listing_review.evaluate as evaluate
 import charmhub_listing_review.update_issue as update_issue
 from charmhub_listing_review.evaluate import CheckResult, EvaluationResult
@@ -178,7 +180,7 @@ https://docs.example.com
     assert details['ci_release_url'] == 'https://ci.example.com/release'
     assert details['ci_integration_url'] == 'https://ci.example.com/integration'
     assert details['documentation_link'] == 'https://docs.example.com'
-    assert details['default_branch'] == 'main'
+    assert details['review_branch'] == 'main'
     assert (
         details['contribution_link']
         == 'https://github.com/canonical/my-charm/blob/main/CONTRIBUTING.md'
@@ -220,7 +222,7 @@ https://docs.example.com
 """
     mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
     details = update_issue.get_details_from_issue(123)
-    assert details['default_branch'] == '26.04'
+    assert details['review_branch'] == '26.04'
     assert (
         details['contribution_link']
         == 'https://github.com/canonical/my-charm/blob/26.04/CONTRIBUTING.md'
@@ -229,6 +231,28 @@ https://docs.example.com
     assert (
         details['security_link'] == 'https://github.com/canonical/my-charm/blob/26.04/SECURITY.md'
     )
+    mock_get_default_branch.assert_not_called()
+
+
+@mock.patch('charmhub_listing_review.update_issue.get_default_branch')
+@mock.patch('subprocess.run')
+def test_get_details_from_issue_with_old_branch_heading(
+    mock_subprocess_run, mock_get_default_branch
+):
+    issue_body = """
+### Charm name
+my-charm
+
+### Project Repository
+https://github.com/canonical/my-charm
+
+### Default Branch
+
+26.04
+"""
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
+    details = update_issue.get_details_from_issue(123)
+    assert details['review_branch'] == '26.04'
     mock_get_default_branch.assert_not_called()
 
 
@@ -264,6 +288,63 @@ https://docs.example.com
     assert details['charm_dir'] == 'charms/my-charm'
 
 
+@mock.patch('charmhub_listing_review.update_issue.get_default_branch', return_value='main')
+@mock.patch('subprocess.run')
+def test_get_details_from_issue_with_blank_branch(mock_subprocess_run, mock_get_default_branch):
+    issue_body = """
+### Project Repository
+
+https://github.com/canonical/my-charm
+
+### Review Branch
+
+_No response_
+"""
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
+    details = update_issue.get_details_from_issue(123)
+    assert details['review_branch'] == 'main'
+    assert details['license_link'] == 'https://github.com/canonical/my-charm/blob/main/LICENSE'
+    mock_get_default_branch.assert_called_once_with('https://github.com/canonical/my-charm')
+
+
+@mock.patch('charmhub_listing_review.update_issue.get_default_branch')
+@mock.patch('subprocess.run')
+def test_get_details_from_issue_reads_every_template_field(
+    mock_subprocess_run, mock_get_default_branch
+):
+    template_path = (
+        pathlib.Path(__file__).parents[2] / '.github' / 'ISSUE_TEMPLATE' / 'listing-request.yml'
+    )
+    template = yaml.safe_load(template_path.read_text())
+    # Markdown blocks are only shown on the form, and don't appear in the issue.
+    inputs = {
+        item['id']: item['attributes']['label']
+        for item in template['body']
+        if item['type'] != 'markdown'
+    }
+    # Render the issue the way that GitHub does, with a distinct value for each field.
+    issue_body = '\n\n'.join(f'### {label}\n\nvalue-{id_}' for id_, label in inputs.items())
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
+    details = update_issue.get_details_from_issue(123)
+    # This deliberately repeats the mapping in get_details_from_issue, so that a heading read
+    # into the wrong key fails here.
+    expected_keys = {
+        'Name': 'name',
+        'Demo': 'demo_url',
+        'Repository-Link': 'project_repo',
+        'Charm-Directory': 'charm_dir',
+        'CI-Linting': 'ci_linting',
+        'CI-Release': 'ci_release_url',
+        'CI-Integration': 'ci_integration_url',
+        'Documentation-Link': 'documentation_link',
+        'Review-Branch': 'review_branch',
+    }
+    assert inputs.keys() == expected_keys.keys()
+    for id_, key in expected_keys.items():
+        assert details[key] == f'value-{id_}'
+    mock_get_default_branch.assert_not_called()
+
+
 def test_issue_summary():
     name = 'my-charm'
     summary = update_issue.issue_summary(name)
@@ -282,7 +363,7 @@ def _make_issue_data(**overrides):
         'contribution_link': 'https://github.com/canonical/my-charm/blob/main/CONTRIBUTING.md',
         'license_link': 'https://github.com/canonical/my-charm/blob/main/LICENSE',
         'security_link': 'https://github.com/canonical/my-charm/blob/main/SECURITY.md',
-        'default_branch': 'main',
+        'review_branch': 'main',
         'charm_dir': '.',
     }
     defaults.update(overrides)
@@ -451,7 +532,7 @@ def test_apply_automated_checks_ticks_orphaned_checks(mock_evaluate):
         'contribution_link': 'https://github.com/org/my-charm/blob/main/CONTRIBUTING.md',
         'license_link': 'https://github.com/org/my-charm/blob/main/LICENSE',
         'security_link': 'https://github.com/org/my-charm/blob/main/SECURITY.md',
-        'default_branch': 'main',
+        'review_branch': 'main',
         'charm_dir': '.',
     }
     result = update_issue.apply_automated_checks(
