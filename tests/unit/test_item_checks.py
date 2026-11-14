@@ -1,0 +1,142 @@
+# Copyright 2026 Canonical Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Tests for the per-item source-reading checks."""
+
+import pathlib
+
+import pytest
+
+from charmhub_listing_review._models import ItemAssessment, Verdict
+from charmhub_listing_review.item_checks import (
+    CharmSource,
+    Evidence,
+    ItemCheck,
+    first_party_python_files,
+)
+
+
+def _charm(tmp_path: pathlib.Path, **files: str) -> pathlib.Path:
+    """Write ``files`` (relative path -> source) into a charm directory."""
+    for name, source in files.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source)
+    return tmp_path
+
+
+class TestFirstPartyPythonFiles:
+    def test_excludes_vendored_charm_libs(self, tmp_path: pathlib.Path):
+        charm = _charm(
+            tmp_path,
+            **{
+                'src/charm.py': '',
+                'lib/charms/data_platform_libs/v0/data_interfaces.py': '',
+                'lib/charms/loki_k8s/v1/loki_push_api.py': '',
+            },
+        )
+        found = [p.relative_to(charm).as_posix() for p in first_party_python_files(charm)]
+        assert found == ['src/charm.py']
+
+    def test_includes_the_charms_own_published_library(self, tmp_path: pathlib.Path):
+        charm = _charm(
+            tmp_path,
+            **{
+                'src/charm.py': '',
+                'lib/charms/my_charm/v0/my_lib.py': '',
+                'lib/charms/someone_else/v0/their_lib.py': '',
+            },
+        )
+        found = [
+            p.relative_to(charm).as_posix() for p in first_party_python_files(charm, 'my-charm')
+        ]
+        assert found == ['lib/charms/my_charm/v0/my_lib.py', 'src/charm.py']
+
+    def test_excludes_tests(self, tmp_path: pathlib.Path):
+        charm = _charm(tmp_path, **{'src/charm.py': '', 'tests/unit/test_charm.py': ''})
+        found = [p.relative_to(charm).as_posix() for p in first_party_python_files(charm)]
+        assert found == ['src/charm.py']
+
+    @pytest.mark.parametrize(
+        'excluded',
+        [
+            '.venv/lib/python3.12/site-packages/pkg/mod.py',
+            'env/lib/python3.12/site-packages/pkg/mod.py',
+            'node_modules/pkg/mod.py',
+            'build/lib/mod.py',
+            'dist/mod.py',
+            '.eggs/pkg/mod.py',
+        ],
+    )
+    def test_excludes_environments_and_build_output(self, tmp_path: pathlib.Path, excluded: str):
+        charm = _charm(tmp_path, **{'src/charm.py': '', excluded: ''})
+        found = [p.relative_to(charm).as_posix() for p in first_party_python_files(charm)]
+        assert found == ['src/charm.py']
+
+
+class TestCharmcraftYaml:
+    def test_unreadable_file_is_empty(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        (tmp_path / 'charmcraft.yaml').write_text('name: my-charm\n')
+
+        def fail(*args: object, **kwargs: object) -> str:
+            raise PermissionError('Permission denied')
+
+        monkeypatch.setattr(pathlib.Path, 'read_text', fail)
+        assert CharmSource(charm_path=tmp_path).charmcraft_yaml() == {}
+
+
+class TestCharmSourceRepo:
+    def test_defaults_to_the_charm_directory(self, tmp_path: pathlib.Path):
+        assert CharmSource(charm_path=tmp_path).repo == tmp_path
+
+    def test_follows_a_reassigned_charm_directory(self, tmp_path: pathlib.Path):
+        source = CharmSource(charm_path=tmp_path)
+        source.charm_path = tmp_path / 'charms' / 'my-charm'
+        assert source.repo == tmp_path / 'charms' / 'my-charm'
+
+    def test_explicit_root(self, tmp_path: pathlib.Path):
+        source = CharmSource(charm_path=tmp_path / 'charms' / 'my-charm', repo_path=tmp_path)
+        assert source.repo == tmp_path
+
+
+class TestUnreadInputsCapTheVerdict:
+    """An item cannot be settled by evidence it could not read."""
+
+    def _check(self, verdict: Verdict, unread: list[str]) -> ItemCheck:
+        return ItemCheck(
+            checklist_id='example',
+            gather=lambda source: Evidence(lines=['looked'], unread=unread),
+            decide=lambda evidence: ItemAssessment(
+                checklist_id='example',
+                verdict=verdict,
+                rationale='The charm is fine.',
+                evidence=evidence.lines,
+            ),
+        )
+
+    @pytest.mark.parametrize('verdict', [Verdict.PASS, Verdict.FAIL, Verdict.NOT_APPLICABLE])
+    def test_a_settled_verdict_is_capped(self, tmp_path: pathlib.Path, verdict: Verdict):
+        check = self._check(verdict, ['src/other.py: could not be parsed'])
+        assessment = check.assess(CharmSource(charm_path=tmp_path))
+        assert assessment.verdict is Verdict.NEEDS_HUMAN
+        assert 'could not be read' in assessment.rationale
+        assert 'src/other.py: could not be parsed' in assessment.evidence
+
+    def test_nothing_unread_is_left_alone(self, tmp_path: pathlib.Path):
+        check = self._check(Verdict.PASS, [])
+        assessment = check.assess(CharmSource(charm_path=tmp_path))
+        assert assessment.verdict is Verdict.PASS
+        assert assessment.rationale == 'The charm is fine.'
