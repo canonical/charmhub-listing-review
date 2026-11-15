@@ -264,6 +264,87 @@ https://docs.example.com
     assert details['charm_dir'] == 'charms/my-charm'
 
 
+@mock.patch('charmhub_listing_review.update_issue.get_default_branch', return_value='main')
+@mock.patch('subprocess.run')
+def test_get_details_from_issue_extracts_urls_from_link_fields(
+    mock_subprocess_run, mock_get_default_branch
+):
+    issue_body = """
+### Charm name
+my-charm
+
+### Demo
+Deployment Tutorial: https://demo.example.com/tutorial/
+
+### Project Repository
+Source: https://github.com/canonical/my-charm (main branch)
+
+### Charm Directory
+
+_No response_
+
+### CI Linting
+Lint job https://ci.example.com/lint
+
+### CI Release
+See https://ci.example.com/release for releases
+
+### CI Integration Tests
+Integration: https://ci.example.com/integration and https://ci.example.com/other
+
+### Documentation Link
+Docs - https://docs.example.com
+"""
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
+    details = update_issue.get_details_from_issue(123)
+    assert details['name'] == 'my-charm'
+    assert details['demo_url'] == 'https://demo.example.com/tutorial/'
+    assert details['project_repo'] == 'https://github.com/canonical/my-charm'
+    assert details['ci_linting'] == 'https://ci.example.com/lint'
+    assert details['ci_release_url'] == 'https://ci.example.com/release'
+    assert details['ci_integration_url'] == 'https://ci.example.com/integration'
+    assert details['documentation_link'] == 'https://docs.example.com'
+    assert (
+        details['contribution_link']
+        == 'https://github.com/canonical/my-charm/blob/main/CONTRIBUTING.md'
+    )
+    mock_get_default_branch.assert_called_once_with('https://github.com/canonical/my-charm')
+
+
+@mock.patch('charmhub_listing_review.update_issue.get_default_branch', return_value='main')
+@mock.patch('subprocess.run')
+def test_get_details_from_issue_keeps_link_fields_without_a_url(
+    mock_subprocess_run, mock_get_default_branch
+):
+    issue_body = """
+### Charm name
+my-charm
+
+### Demo
+See the README
+
+### Project Repository
+https://github.com/canonical/my-charm
+
+### CI Linting
+_No response_
+
+### CI Release
+https://ci.example.com/release
+
+### CI Integration Tests
+https://ci.example.com/integration
+
+### Documentation Link
+docs.example.com
+"""
+    mock_subprocess_run.return_value = mock.Mock(stdout=json.dumps({'body': issue_body}))
+    details = update_issue.get_details_from_issue(123)
+    assert details['demo_url'] == 'See the README'
+    assert details['ci_linting'] == '_No response_'
+    assert details['documentation_link'] == 'docs.example.com'
+
+
 def test_issue_summary():
     name = 'my-charm'
     summary = update_issue.issue_summary(name)

@@ -158,6 +158,27 @@ class _IssueData(TypedDict):
     security_link: str
 
 
+_URL_RE = re.compile(r'https?://\S+')
+
+# Fields where the template asks for a single URL. Authors sometimes add a
+# label or other prose around it, so we pull the URL out rather than assume
+# the whole line is one.
+_URL_FIELDS = frozenset({
+    'demo_url',
+    'project_repo',
+    'ci_linting',
+    'ci_release_url',
+    'ci_integration_url',
+    'documentation_link',
+})
+
+
+def _extract_url(value: str) -> str:
+    """Return the first URL in ``value``, or ``value`` itself if there isn't one."""
+    match = _URL_RE.search(value)
+    return match.group(0) if match else value
+
+
 def get_details_from_issue(issue_number: int, repo: str | None = None):
     """Fetch details from the issue number using the GitHub CLI.
 
@@ -194,6 +215,8 @@ def get_details_from_issue(issue_number: int, repo: str | None = None):
         match = re.search(pattern, body)
         if match:
             value = match.group(1).strip()
+            if key in _URL_FIELDS:
+                value = _extract_url(value)
             issue_data[key] = value
         else:
             issue_data[key] = None
