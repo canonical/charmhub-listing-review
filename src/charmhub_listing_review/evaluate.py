@@ -83,6 +83,18 @@ def _raw_content_url(url: str) -> str:
     return f'https://raw.githubusercontent.com/{match["repo"]}/{match["path"]}'
 
 
+class CharmDirNotFoundError(ValueError):
+    """The charm directory isn't a directory in the cloned repository.
+
+    This is usually a typo in the listing request's Charm Directory field, so
+    callers may want to report it rather than fail outright.
+    """
+
+    def __init__(self, charm_dir: str):
+        super().__init__(f'charm_dir does not exist or is not a directory: {charm_dir!r}')
+        self.charm_dir = charm_dir
+
+
 def evaluate(
     charm_name: str,
     repository_url: str,
@@ -112,7 +124,7 @@ def evaluate(
     try:
         charm_path = (repo_dir / charm_dir).resolve()
         if not charm_path.is_dir():
-            raise ValueError(f'charm_dir does not exist or is not a directory: {charm_dir!r}')
+            raise CharmDirNotFoundError(charm_dir)
         if not str(charm_path).startswith(str(repo_dir.resolve())):
             raise ValueError(f'charm_dir resolves outside the repository: {charm_dir!r}')
         results.append(coding_conventions(linting_url))

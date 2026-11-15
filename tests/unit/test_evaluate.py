@@ -104,7 +104,7 @@ class TestEvaluateCharmDir:
     @mock.patch('charmhub_listing_review.evaluate._clone_repo')
     def test_evaluate_rejects_nonexistent_charm_dir(self, mock_clone, tmp_path):
         mock_clone.return_value = tmp_path
-        with pytest.raises(ValueError, match='does not exist'):
+        with pytest.raises(evaluate.CharmDirNotFoundError, match='does not exist') as exc_info:
             evaluate.evaluate(
                 charm_name='my-charm',
                 repository_url='https://github.com/org/repo',
@@ -114,6 +114,22 @@ class TestEvaluateCharmDir:
                 security_url='',
                 charm_dir='nonexistent',
             )
+        # It's still a ValueError, so existing callers that catch that are unaffected.
+        assert isinstance(exc_info.value, ValueError)
+        assert exc_info.value.charm_dir == 'nonexistent'
+
+    def test_evaluate_absolute_charm_dir_is_not_a_missing_dir(self):
+        with pytest.raises(ValueError) as exc_info:
+            evaluate.evaluate(
+                charm_name='my-charm',
+                repository_url='https://github.com/org/repo',
+                linting_url='',
+                contribution_url='',
+                license_url='',
+                security_url='',
+                charm_dir='/etc',
+            )
+        assert not isinstance(exc_info.value, evaluate.CharmDirNotFoundError)
 
 
 class TestCloneRepo:
