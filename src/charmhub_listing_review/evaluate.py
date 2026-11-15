@@ -847,6 +847,20 @@ def repo_has_lock_file(repo_dir: pathlib.Path) -> CheckResult:
     )
 
 
+def _parse_svg_pixels(value: str) -> float | None:
+    """Parse an SVG length that is unitless or in pixels.
+
+    Returns:
+        The length in pixels, or None if it uses another unit (such as mm or %)
+        or cannot be parsed.
+    """
+    value = value.strip().removesuffix('px').strip()
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
 def charm_has_icon(repo_dir: pathlib.Path) -> CheckResult:
     """The charm has an icon.
 
@@ -891,16 +905,21 @@ def charm_has_icon(repo_dir: pathlib.Path) -> CheckResult:
     view_box = root.attrib.get('viewBox')
     correct_size = False
     if width and height:
-        width_val = float(width.replace('px', ''))
-        height_val = float(height.replace('px', ''))
-        context['width'] = width_val
-        context['height'] = height_val
-        correct_size = math.isclose(width_val, 100) and math.isclose(height_val, 100)
+        width_val = _parse_svg_pixels(width)
+        height_val = _parse_svg_pixels(height)
+        if width_val is None or height_val is None:
+            context['error'] = f'unsupported icon size {width!r} x {height!r} (expected pixels)'
+        else:
+            context['width'] = width_val
+            context['height'] = height_val
+            correct_size = math.isclose(width_val, 100) and math.isclose(height_val, 100)
     elif view_box:
-        parts = view_box.strip().split()
-        if len(parts) == 4:
-            vb_width = float(parts[2])
-            vb_height = float(parts[3])
+        parts = view_box.replace(',', ' ').split()
+        try:
+            vb_width, vb_height = float(parts[2]), float(parts[3])
+        except (IndexError, ValueError):
+            context['error'] = f'unsupported icon viewBox {view_box!r}'
+        else:
             context['viewBox_width'] = vb_width
             context['viewBox_height'] = vb_height
             correct_size = math.isclose(vb_width, 100) and math.isclose(vb_height, 100)
