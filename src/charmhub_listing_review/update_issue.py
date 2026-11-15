@@ -28,12 +28,12 @@ created issue to be user-friendly, and to include the current checklist.
 """
 
 import argparse
+import http.client
 import json
 import pathlib
 import random
 import re
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
-import urllib.error
 import urllib.request
 from typing import TypedDict, cast
 
@@ -114,7 +114,7 @@ A charm's documentation should focus on the charm itself. For workload-specific 
     try:
         with urllib.request.urlopen(BEST_PRACTICE_SOURCE) as response:
             best_practices_content = response.read().decode()
-    except (urllib.error.URLError, urllib.error.HTTPError):
+    except (OSError, http.client.HTTPException):
         best_practices = []
     else:
         best_practices_content = convert_sphinx_refs(best_practices_content)
