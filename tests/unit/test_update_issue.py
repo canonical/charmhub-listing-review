@@ -508,3 +508,52 @@ def test_best_practices_skips_the_generated_comment_header(mock_urlopen):
     )
     assert '* [ ] -->' not in comment
     assert '* [ ] Name the repository' in comment
+
+
+# These checks have no checklist item to tick. The first three are waiting on
+# their best-practice admonitions in canonical/charmcraft gaining a `:name:`,
+# and charm_lib_docs only ever hands its items to the reviewer.
+_CHECKS_WITHOUT_CHECKLIST_ITEM = {
+    'action_names',
+    'option_names',
+    'relations_includes_optional',
+    'charm_lib_docs',
+}
+
+
+@mock.patch('urllib.request.urlopen')
+def test_every_check_has_a_checklist_item(mock_urlopen, tmp_path):
+    """Each automated check's ID must appear in the posted checklist.
+
+    A check whose ID has no matching `<!-- id: ... -->` line never ticks
+    anything. Best-practice IDs come from the best practices fetched from
+    canonical/operator, so only the IDs this repository owns are checked
+    against the comment here.
+    """
+    mock_urlopen.side_effect = urllib.error.URLError('no network')
+    with (
+        mock.patch.object(evaluate, '_clone_repo', return_value=tmp_path),
+        mock.patch.object(evaluate, '_url_ok', return_value=False),
+        mock.patch.object(evaluate, '_fetch_url', return_value=None),
+    ):
+        evaluation = evaluate.evaluate(
+            'my-charm',
+            'https://github.com/org/my-charm-operator',
+            'https://ci.example.com/lint',
+            'https://example.com/CONTRIBUTING.md',
+            'https://example.com/LICENSE',
+            'https://example.com/SECURITY.md',
+            'main',
+        )
+    comment = update_issue.issue_comment(
+        'my-charm',
+        'https://demo.example.com',
+        'https://release.example.com',
+        'https://integration.example.com',
+        'https://docs.example.com',
+    )
+    without_id = {r.name for r in evaluation.checks if r.checklist_id is None}
+    assert without_id == _CHECKS_WITHOUT_CHECKLIST_ITEM
+    for result in evaluation.checks:
+        if result.checklist_id and not result.checklist_id.startswith('best-practice-'):
+            assert f'<!-- id: {result.checklist_id} -->' in comment, result.name
