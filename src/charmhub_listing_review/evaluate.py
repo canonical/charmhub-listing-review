@@ -87,12 +87,14 @@ class CharmDirNotFoundError(ValueError):
     """The charm directory isn't a directory in the cloned repository.
 
     This is usually a typo in the listing request's Charm Directory field, so
-    callers may want to report it rather than fail outright.
+    callers may want to report it rather than fail outright. ``checks`` holds
+    the results of the checks that don't need the charm directory.
     """
 
-    def __init__(self, charm_dir: str):
+    def __init__(self, charm_dir: str, checks: list[CheckResult]):
         super().__init__(f'charm_dir does not exist or is not a directory: {charm_dir!r}')
         self.charm_dir = charm_dir
+        self.checks = checks
 
 
 def evaluate(
@@ -124,7 +126,17 @@ def evaluate(
     try:
         charm_path = (repo_dir / charm_dir).resolve()
         if not charm_path.is_dir():
-            raise CharmDirNotFoundError(charm_dir)
+            raise CharmDirNotFoundError(
+                charm_dir,
+                checks=[
+                    coding_conventions(linting_url),
+                    contribution_guidelines(contribution_url),
+                    license_statement(license_url),
+                    security_doc(security_url),
+                    check_charm_name(charm_name),
+                    repository_name(repository_url, charm_name),
+                ],
+            )
         if not str(charm_path).startswith(str(repo_dir.resolve())):
             raise ValueError(f'charm_dir resolves outside the repository: {charm_dir!r}')
         results.append(coding_conventions(linting_url))

@@ -117,6 +117,15 @@ class TestEvaluateCharmDir:
         # It's still a ValueError, so existing callers that catch that are unaffected.
         assert isinstance(exc_info.value, ValueError)
         assert exc_info.value.charm_dir == 'nonexistent'
+        # The checks that don't need the charm directory still ran.
+        assert [c.name for c in exc_info.value.checks] == [
+            'coding_conventions',
+            'contribution_guidelines',
+            'license_statement',
+            'security_doc',
+            'check_charm_name',
+            'repository_name',
+        ]
 
     def test_evaluate_absolute_charm_dir_is_not_a_missing_dir(self):
         with pytest.raises(ValueError) as exc_info:

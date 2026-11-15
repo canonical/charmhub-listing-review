@@ -405,11 +405,18 @@ def test_apply_automated_checks_multiline_comment():
     assert '* [ ] Some manual item, no id.' in output
 
 
+@mock.patch('charmhub_listing_review.evaluate._fetch_url', return_value=None)
+@mock.patch('charmhub_listing_review.evaluate._url_ok', return_value=True)
 @mock.patch('charmhub_listing_review.evaluate._clone_repo')
-def test_apply_automated_checks_reports_missing_charm_dir(mock_clone, tmp_path):
-    """A typo in the Charm Directory field is reported, not raised."""
+def test_apply_automated_checks_reports_missing_charm_dir(
+    mock_clone, mock_url_ok, mock_fetch_url, tmp_path
+):
+    """A typo in the Charm Directory field is reported, and the URL-only checks still tick."""
     mock_clone.return_value = tmp_path
-    comment = '* [ ] The charm has an icon. <!-- id: charm-has-icon -->'
+    comment = (
+        '* [ ] CI is automated. <!-- id: best-practice-automated-ci -->\n'
+        '* [ ] The charm has an icon. <!-- id: charm-has-icon -->'
+    )
     output = update_issue.apply_automated_checks(
         cast('update_issue._IssueData', _make_issue_data(charm_dir='bingo/charm')),
         comment,
@@ -417,7 +424,10 @@ def test_apply_automated_checks_reports_missing_charm_dir(mock_clone, tmp_path):
     first_line, _, rest = output.partition('\n\n')
     assert '`bingo/charm`' in first_line
     assert 'not found' in first_line
-    assert rest == comment
+    assert rest == (
+        '* [x] CI is automated. <!-- id: best-practice-automated-ci -->\n'
+        '* [ ] The charm has an icon. <!-- id: charm-has-icon -->'
+    )
 
 
 @mock.patch('charmhub_listing_review.evaluate._clone_repo')

@@ -351,8 +351,9 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
     for the reviewer to handle manually.
 
     If the Charm Directory field doesn't name a directory in the repository,
-    no checks are run, and the comment says so, rather than leaving the
-    reviewer with an unexplained, entirely unticked checklist.
+    only the checks that don't need it are ticked, and the comment says so,
+    rather than leaving the reviewer with an unexplained, mostly unticked
+    checklist.
     """
     try:
         evaluation = evaluate(
@@ -368,17 +369,23 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
     except CharmDirNotFoundError as e:
         note = (
             f'**Note:** the Charm Directory `{e.charm_dir}` was not found in the'
-            ' repository, so the automated checks did not run and nothing below has'
-            ' been ticked. Please correct the Charm Directory field in the request.'
+            ' repository, so the automated checks that need it did not run, and'
+            ' their items below have not been ticked. Please correct the Charm'
+            ' Directory field in the request.'
         )
-        return f'{note}\n\n{comment}'
-    passed_ids = {r.checklist_id for r in evaluation.checks if r.checklist_id and r.passed is True}
+        checks = e.checks
+    else:
+        note = None
+        checks = evaluation.checks
+    passed_ids = {r.checklist_id for r in checks if r.checklist_id and r.passed is True}
     new_lines: list[str] = []
     for line in comment.splitlines():
         match = _ID_MARKER_RE.search(line)
         if match and match.group(1) in passed_ids:
             line = line.replace('* [ ]', '* [x]', 1)
         new_lines.append(line)
+    if note is not None:
+        new_lines[:0] = [note, '']
     return '\n'.join(new_lines)
 
 
