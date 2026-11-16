@@ -558,7 +558,12 @@ def test_every_check_has_a_checklist_item(mock_urlopen, tmp_path):
         'https://docs.example.com',
     )
     without_id = {r.name for r in evaluation.checks if r.checklist_id is None}
-    assert without_id == _CHECKS_AWAITING_CHARMCRAFT_NAME | _CHECKS_WITHOUT_ITEM_BY_DESIGN
+    expected = _CHECKS_AWAITING_CHARMCRAFT_NAME | _CHECKS_WITHOUT_ITEM_BY_DESIGN
+    assert without_id == expected, (
+        f'unexpected checks without a checklist_id (give them one, or add them to a set'
+        f' above): {sorted(without_id - expected)}; listed checks that now have one, or no'
+        f' longer exist (remove them from the sets above): {sorted(expected - without_id)}'
+    )
     for result in evaluation.checks:
         if result.checklist_id and not result.checklist_id.startswith('best-practice-'):
             assert f'<!-- id: {result.checklist_id} -->' in comment, result.name
