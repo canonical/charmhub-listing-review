@@ -128,6 +128,8 @@ class TestEvaluateCharmDir:
         ]
 
     def test_evaluate_absolute_charm_dir_is_not_a_missing_dir(self):
+        # No _clone_repo mock on purpose: the path is rejected before any clone,
+        # so a clone attempt here would itself be a failure.
         with pytest.raises(ValueError) as exc_info:
             evaluate.evaluate(
                 charm_name='my-charm',
