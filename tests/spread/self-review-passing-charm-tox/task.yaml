@@ -28,11 +28,15 @@ execute: |
   # File-based checks should pass.
   echo "$output" | MATCH "✅.*icon"
 
-  # Lock file and requires-python are "Best practices" items, checked against
-  # best-practices.txt fetched live from canonical/operator: these can fail
-  # because that file changed, not because this repo did.
+  # These are "Best practices" items, checked against best-practices.txt
+  # fetched live from canonical/operator: they can fail because that file
+  # changed (for example, an item's ID was renamed), not because this repo did.
+  # The unit tests can't catch that, so every best-practice-* check is here.
   echo "$output" | MATCH "✅.*lock file" || echo "$output" | MATCH "✅.*committed to version control"
   echo "$output" | MATCH "✅.*requires-python"
+  echo "$output" | MATCH "✅.*automated using a continuous integration"
+  echo "$output" | MATCH "✅.*commands configured by the Charmcraft profile"
+  echo "$output" | MATCH "✅.*name the repository"
 
   # Progress summary should be present and show passes.
   echo "$output" | MATCH "Progress:.*passed"
