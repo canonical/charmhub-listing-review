@@ -423,7 +423,7 @@ def test_apply_automated_checks_reports_missing_charm_dir(
     )
     first_line, _, rest = output.partition('\n\n')
     assert '`bingo/charm`' in first_line
-    assert 'not found' in first_line
+    assert 'not found in the repository on branch `main`' in first_line
     assert rest == (
         '* [x] CI is automated. <!-- id: best-practice-automated-ci -->\n'
         '* [ ] The charm has an icon. <!-- id: charm-has-icon -->'

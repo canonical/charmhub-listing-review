@@ -369,9 +369,10 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
     except CharmDirNotFoundError as e:
         note = (
             f'**Note:** the Charm Directory `{e.charm_dir}` was not found in the'
-            ' repository, so the automated checks that need it did not run, and'
-            ' their items below have not been ticked. Please correct the Charm'
-            ' Directory field in the request.'
+            f' repository on branch `{issue_data["default_branch"]}`, so the automated'
+            ' checks that need it did not run, and their items below have not been'
+            ' ticked. Please check the Charm Directory field in the request, and the'
+            ' branch, in case the directory is on another one.'
         )
         checks = e.checks
     else:
