@@ -510,13 +510,17 @@ def test_best_practices_skips_the_generated_comment_header(mock_urlopen):
     assert '* [ ] Name the repository' in comment
 
 
-# These checks have no checklist item to tick. The first three are waiting on
-# their best-practice admonitions in canonical/charmcraft gaining a `:name:`,
-# and charm_lib_docs only ever hands its items to the reviewer.
-_CHECKS_WITHOUT_CHECKLIST_ITEM = {
+# Checks with no checklist item to tick yet, because their best-practice
+# admonitions in canonical/charmcraft don't have a `:name:`. Remove each one
+# from here when it gets a checklist_id.
+_CHECKS_AWAITING_CHARMCRAFT_NAME = {
     'action_names',
     'option_names',
     'relations_includes_optional',
+}
+
+# Checks that never have a checklist item: they hand their items to the reviewer.
+_CHECKS_WITHOUT_ITEM_BY_DESIGN = {
     'charm_lib_docs',
 }
 
@@ -528,7 +532,8 @@ def test_every_check_has_a_checklist_item(mock_urlopen, tmp_path):
     A check whose ID has no matching `<!-- id: ... -->` line never ticks
     anything. Best-practice IDs come from the best practices fetched from
     canonical/operator, so only the IDs this repository owns are checked
-    against the comment here.
+    against the comment here; the passing self-review spread tasks cover the
+    best-practice ones against the live file.
     """
     mock_urlopen.side_effect = urllib.error.URLError('no network')
     with (
@@ -553,7 +558,7 @@ def test_every_check_has_a_checklist_item(mock_urlopen, tmp_path):
         'https://docs.example.com',
     )
     without_id = {r.name for r in evaluation.checks if r.checklist_id is None}
-    assert without_id == _CHECKS_WITHOUT_CHECKLIST_ITEM
+    assert without_id == _CHECKS_AWAITING_CHARMCRAFT_NAME | _CHECKS_WITHOUT_ITEM_BY_DESIGN
     for result in evaluation.checks:
         if result.checklist_id and not result.checklist_id.startswith('best-practice-'):
             assert f'<!-- id: {result.checklist_id} -->' in comment, result.name
