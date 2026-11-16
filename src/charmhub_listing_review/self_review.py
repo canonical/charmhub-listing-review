@@ -32,7 +32,7 @@ import argparse
 import re
 import sys
 
-from .evaluate import evaluate, get_default_branch
+from .evaluate import CharmDirNotFoundError, CheckResult, evaluate, get_default_branch
 from .update_issue import issue_comment
 
 _ID_MARKER_RE = re.compile(r'<!--\s*id:\s*(\S+)\s*-->')
@@ -62,6 +62,24 @@ def format_checklist_for_console(checklist_markdown: str) -> str:
         elif line.strip() and not line.startswith('```'):
             formatted_lines.append(f' {line.strip()}')
     return '\n'.join(formatted_lines)
+
+
+def _mark_results(comment: str, checks: list[CheckResult]) -> str:
+    """Mark the checklist items that have a matching automated check result."""
+    results_by_id = {r.checklist_id: r for r in checks if r.checklist_id}
+    new_lines: list[str] = []
+    for line in comment.splitlines():
+        match = _ID_MARKER_RE.search(line)
+        if match:
+            result = results_by_id.get(match.group(1))
+            if result is not None and result.passed is True:
+                line = line.replace('* [ ]', '* [x]', 1)
+            elif result is not None and result.passed is False and not result.optional:
+                line = line.replace('* [ ]', '* [o]', 1)
+            # passed is None, an optional check failed, or no matching
+            # check: leave as '* [ ]' for manual review.
+        new_lines.append(line)
+    return '\n'.join(new_lines)
 
 
 def print_self_review_results(
@@ -116,6 +134,7 @@ def print_self_review_results(
             license_url = f'{project_repo}/blob/{default_branch}/LICENSE'
             security_url = f'{project_repo}/blob/{default_branch}/SECURITY.md'
 
+        checks: list[CheckResult] = []
         try:
             evaluation = evaluate(
                 charm_name,
@@ -127,21 +146,22 @@ def print_self_review_results(
                 default_branch,
                 charm_dir=charm_dir,
             )
-
-            results_by_id = {r.checklist_id: r for r in evaluation.checks if r.checklist_id}
-            new_lines: list[str] = []
-            for line in comment.splitlines():
-                match = _ID_MARKER_RE.search(line)
-                if match:
-                    result = results_by_id.get(match.group(1))
-                    if result is not None and result.passed is True:
-                        line = line.replace('* [ ]', '* [x]', 1)
-                    elif result is not None and result.passed is False and not result.optional:
-                        line = line.replace('* [ ]', '* [o]', 1)
-                    # passed is None, an optional check failed, or no matching
-                    # check: leave as '* [ ]' for manual review.
-                new_lines.append(line)
-            comment = '\n'.join(new_lines)
+            checks = evaluation.checks
+        except CharmDirNotFoundError as e:
+            print(
+                f'\n⚠️  Warning: The charm directory `{e.charm_dir}` was not found'
+                ' in the repository.'
+            )
+            print(
+                '   The checks that need it did not run. Check the --charm-dir value, and the'
+                ' --branch value if the directory is on another branch.'
+            )
+            checks = e.checks
+            if project_repo.startswith('file://'):
+                # The local document URLs above include the charm directory, so
+                # these checks failed because of it, not because of the documents.
+                doc_checks = {'contribution_guidelines', 'license_statement', 'security_doc'}
+                checks = [c for c in checks if c.name not in doc_checks]
         except Exception as e:
             print('\n⚠️  Warning: Could not run automated checks on repository.')
             print(
@@ -154,6 +174,8 @@ def print_self_review_results(
                 print('   Could not clone the repository.')
             else:
                 print(f'   Error details: {e}')
+        if checks:
+            comment = _mark_results(comment, checks)
 
     formatted_checklist = format_checklist_for_console(comment)
     print(formatted_checklist)
