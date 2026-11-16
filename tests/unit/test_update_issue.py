@@ -565,6 +565,16 @@ def test_issue_comment_without_best_practices(error):
     assert 'best-practice-' not in comment
 
 
+def test_issue_comment_with_undecodable_best_practices():
+    """A stray non-UTF-8 byte in the best practices doesn't crash the comment."""
+    with mock.patch('urllib.request.urlopen') as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = b'caf\xe9\n'
+        comment = update_issue.issue_comment(
+            'my-charm', 'https://demo.example.com', '', '', 'https://docs.example.com'
+        )
+    assert '<!-- id: charm-has-icon -->' in comment
+
+
 def test_issue_comment_includes_orphaned_check_bullets():
     comment = update_issue.issue_comment(
         'my-charm', 'https://demo.example.com', '', '', 'https://docs.example.com'
