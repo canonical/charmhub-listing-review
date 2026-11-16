@@ -562,6 +562,8 @@ def test_issue_comment_without_best_practices(error):
             'my-charm', 'https://demo.example.com', '', '', 'https://docs.example.com'
         )
     assert '<!-- id: charm-has-icon -->' in comment
+    # Every best-practice-* ID comes from the fetched best practices, none from
+    # the template, so their absence means the fetched section was left out.
     assert 'best-practice-' not in comment
 
 
