@@ -20,6 +20,8 @@ import urllib.error
 from typing import cast
 from unittest import mock
 
+import pytest
+
 import charmhub_listing_review.evaluate as evaluate
 import charmhub_listing_review.update_issue as update_issue
 from charmhub_listing_review.evaluate import CheckResult, EvaluationResult
@@ -309,6 +311,35 @@ Docs - https://docs.example.com
         == 'https://github.com/canonical/my-charm/blob/main/CONTRIBUTING.md'
     )
     mock_get_default_branch.assert_called_once_with('https://github.com/canonical/my-charm')
+
+
+@pytest.mark.parametrize(
+    ('value', 'expected'),
+    [
+        (
+            'Source: https://github.com/canonical/my-charm.',
+            'https://github.com/canonical/my-charm',
+        ),
+        (
+            '[my-charm](https://github.com/canonical/my-charm)',
+            'https://github.com/canonical/my-charm',
+        ),
+        ('See <https://github.com/canonical/my-charm>', 'https://github.com/canonical/my-charm'),
+        (
+            'https://github.com/canonical/my-charm, main branch',
+            'https://github.com/canonical/my-charm',
+        ),
+        ('(https://github.com/canonical/my-charm).', 'https://github.com/canonical/my-charm'),
+        (
+            'https://en.wikipedia.org/wiki/Juju_(software)',
+            'https://en.wikipedia.org/wiki/Juju_(software)',
+        ),
+        ('https://demo.example.com/tutorial/', 'https://demo.example.com/tutorial/'),
+        ('See the README', 'See the README'),
+    ],
+)
+def test_extract_url_drops_surrounding_punctuation(value: str, expected: str):
+    assert update_issue._extract_url(value) == expected
 
 
 @mock.patch('charmhub_listing_review.update_issue.get_default_branch', return_value='main')

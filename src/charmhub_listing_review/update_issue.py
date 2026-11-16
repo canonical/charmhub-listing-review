@@ -158,7 +158,10 @@ class _IssueData(TypedDict):
     security_link: str
 
 
-_URL_RE = re.compile(r'https?://\S+')
+# Stop at whitespace and at the angle brackets of an autolink like <https://...>.
+_URL_RE = re.compile(r'https?://[^\s<>]+')
+# Punctuation that ends a sentence or a Markdown link rather than the URL.
+_URL_TRAILING = '.,;:!?)]'
 
 # Fields where the template asks for a single URL. Authors sometimes add a
 # label or other prose around it, so we pull the URL out rather than assume
@@ -176,7 +179,16 @@ _URL_FIELDS = frozenset({
 def _extract_url(value: str) -> str:
     """Return the first URL in ``value``, or ``value`` itself if there isn't one."""
     match = _URL_RE.search(value)
-    return match.group(0) if match else value
+    if not match:
+        return value
+    url = match.group(0)
+    while url and url[-1] in _URL_TRAILING:
+        # Keep a closing parenthesis that pairs with one in the URL, as in
+        # https://en.wikipedia.org/wiki/Juju_(software).
+        if url[-1] == ')' and url.count('(') >= url.count(')'):
+            break
+        url = url[:-1]
+    return url
 
 
 def get_details_from_issue(issue_number: int, repo: str | None = None):
