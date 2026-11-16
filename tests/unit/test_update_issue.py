@@ -335,6 +335,7 @@ Docs - https://docs.example.com
             'https://en.wikipedia.org/wiki/Juju_(software)',
         ),
         ('https://demo.example.com/tutorial/', 'https://demo.example.com/tutorial/'),
+        ('Repo: HTTPS://github.com/canonical/my-charm', 'HTTPS://github.com/canonical/my-charm'),
         ('See the README', 'See the README'),
     ],
 )

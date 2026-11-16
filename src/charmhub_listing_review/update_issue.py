@@ -159,7 +159,7 @@ class _IssueData(TypedDict):
 
 
 # Stop at whitespace and at the angle brackets of an autolink like <https://...>.
-_URL_RE = re.compile(r'https?://[^\s<>]+')
+_URL_RE = re.compile(r'https?://[^\s<>]+', re.IGNORECASE)
 # Punctuation that ends a sentence or a Markdown link rather than the URL.
 _URL_TRAILING = '.,;:!?)]'
 
