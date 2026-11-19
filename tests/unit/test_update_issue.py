@@ -14,6 +14,7 @@
 
 """Test the issue comment generation."""
 
+import http.client
 import json
 import pathlib
 import urllib.error
@@ -514,6 +515,32 @@ def test_apply_automated_checks_multiline_comment():
     assert '* [ ] The charm has an icon. <!-- id: charm-has-icon -->' in output
     assert '* [x] Name the repository... <!-- id: best-practice-repository-naming -->' in output
     assert '* [ ] Some manual item, no id.' in output
+
+
+@pytest.mark.parametrize(
+    'error', [http.client.IncompleteRead(b'partial'), urllib.error.URLError('no network')]
+)
+def test_issue_comment_without_best_practices(error):
+    """A failed fetch of the best practices leaves them out rather than crashing."""
+    with mock.patch('urllib.request.urlopen') as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value.read.side_effect = error
+        comment = update_issue.issue_comment(
+            'my-charm', 'https://demo.example.com', '', '', 'https://docs.example.com'
+        )
+    assert '<!-- id: charm-has-icon -->' in comment
+    # Every best-practice-* ID comes from the fetched best practices, none from
+    # the template, so their absence means the fetched section was left out.
+    assert 'best-practice-' not in comment
+
+
+def test_issue_comment_with_undecodable_best_practices():
+    """A stray non-UTF-8 byte in the best practices doesn't crash the comment."""
+    with mock.patch('urllib.request.urlopen') as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = b'caf\xe9\n'
+        comment = update_issue.issue_comment(
+            'my-charm', 'https://demo.example.com', '', '', 'https://docs.example.com'
+        )
+    assert '<!-- id: charm-has-icon -->' in comment
 
 
 def test_issue_comment_includes_orphaned_check_bullets():
