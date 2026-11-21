@@ -77,7 +77,8 @@ class TestEvaluateCharmDir:
         assert python_result
         assert python_result[0].passed is True
 
-    def test_evaluate_rejects_absolute_charm_dir(self):
+    @mock.patch('charmhub_listing_review.evaluate._clone_repo')
+    def test_evaluate_rejects_absolute_charm_dir(self, mock_clone):
         with pytest.raises(ValueError, match='relative path'):
             evaluate.evaluate(
                 charm_name='my-charm',
@@ -88,9 +89,11 @@ class TestEvaluateCharmDir:
                 security_url='',
                 charm_dir='/etc',
             )
+        mock_clone.assert_not_called()
 
-    def test_evaluate_rejects_traversal_charm_dir(self):
-        with pytest.raises(ValueError, match="'\\.\\.'"):
+    @mock.patch('charmhub_listing_review.evaluate._clone_repo')
+    def test_evaluate_rejects_traversal_charm_dir(self, mock_clone):
+        with pytest.raises(ValueError, match="'\\.\\.'") as exc_info:
             evaluate.evaluate(
                 charm_name='my-charm',
                 repository_url='https://github.com/org/repo',
@@ -100,11 +103,13 @@ class TestEvaluateCharmDir:
                 security_url='',
                 charm_dir='../../etc',
             )
+        assert not isinstance(exc_info.value, evaluate.CharmDirNotFoundError)
+        mock_clone.assert_not_called()
 
     @mock.patch('charmhub_listing_review.evaluate._clone_repo')
     def test_evaluate_rejects_nonexistent_charm_dir(self, mock_clone, tmp_path):
         mock_clone.return_value = tmp_path
-        with pytest.raises(ValueError, match='does not exist'):
+        with pytest.raises(evaluate.CharmDirNotFoundError, match='does not exist') as exc_info:
             evaluate.evaluate(
                 charm_name='my-charm',
                 repository_url='https://github.com/org/repo',
@@ -114,6 +119,34 @@ class TestEvaluateCharmDir:
                 security_url='',
                 charm_dir='nonexistent',
             )
+        # It's still a ValueError, so existing callers that catch that are unaffected.
+        assert isinstance(exc_info.value, ValueError)
+        assert exc_info.value.charm_dir == 'nonexistent'
+        # The checks that don't need the charm directory still ran.
+        assert [c.name for c in exc_info.value.checks] == [
+            'coding_conventions',
+            'contribution_guidelines',
+            'license_statement',
+            'security_doc',
+            'check_charm_name',
+            'repository_name',
+        ]
+
+    @mock.patch('charmhub_listing_review.evaluate._clone_repo')
+    def test_evaluate_absolute_charm_dir_is_not_a_missing_dir(self, mock_clone):
+        with pytest.raises(ValueError) as exc_info:
+            evaluate.evaluate(
+                charm_name='my-charm',
+                repository_url='https://github.com/org/repo',
+                linting_url='',
+                contribution_url='',
+                license_url='',
+                security_url='',
+                charm_dir='/etc',
+            )
+        assert not isinstance(exc_info.value, evaluate.CharmDirNotFoundError)
+        # The path is rejected before any clone.
+        mock_clone.assert_not_called()
 
 
 class TestCloneRepo:

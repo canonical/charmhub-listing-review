@@ -516,6 +516,40 @@ def test_apply_automated_checks_multiline_comment():
     assert '* [ ] Some manual item, no id.' in output
 
 
+@mock.patch('charmhub_listing_review.evaluate._fetch_url', return_value=None)
+@mock.patch('charmhub_listing_review.evaluate._url_ok', return_value=True)
+@mock.patch('charmhub_listing_review.evaluate._clone_repo')
+def test_apply_automated_checks_reports_missing_charm_dir(
+    mock_clone, mock_url_ok, mock_fetch_url, tmp_path
+):
+    """A typo in the Charm Directory field is reported, and the URL-only checks still tick."""
+    mock_clone.return_value = tmp_path
+    comment = (
+        '* [ ] CI is automated. <!-- id: best-practice-automated-ci -->\n'
+        '* [ ] The charm has an icon. <!-- id: charm-has-icon -->'
+    )
+    output = update_issue.apply_automated_checks(
+        cast('update_issue._IssueData', _make_issue_data(charm_dir='bingo/charm')),
+        comment,
+    )
+    first_line, _, rest = output.partition('\n\n')
+    assert '`bingo/charm`' in first_line
+    assert 'not found in the repository on branch `main`' in first_line
+    assert rest == (
+        '* [x] CI is automated. <!-- id: best-practice-automated-ci -->\n'
+        '* [ ] The charm has an icon. <!-- id: charm-has-icon -->'
+    )
+
+
+@mock.patch('charmhub_listing_review.evaluate._clone_repo')
+def test_apply_automated_checks_still_rejects_unsafe_charm_dir(mock_clone):
+    with pytest.raises(ValueError, match='relative path'):
+        update_issue.apply_automated_checks(
+            cast('update_issue._IssueData', _make_issue_data(charm_dir='/etc')), ''
+        )
+    mock_clone.assert_not_called()
+
+
 def test_issue_comment_includes_orphaned_check_bullets():
     comment = update_issue.issue_comment(
         'my-charm', 'https://demo.example.com', '', '', 'https://docs.example.com'

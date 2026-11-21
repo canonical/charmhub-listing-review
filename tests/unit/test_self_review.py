@@ -17,7 +17,11 @@
 from unittest import mock
 
 import charmhub_listing_review.self_review as self_review
-from charmhub_listing_review.evaluate import CheckResult, EvaluationResult
+from charmhub_listing_review.evaluate import (
+    CharmDirNotFoundError,
+    CheckResult,
+    EvaluationResult,
+)
 
 
 @mock.patch('charmhub_listing_review.self_review.get_default_branch', return_value='main')
@@ -65,3 +69,56 @@ def test_required_check_failure_is_marked_failed(mock_evaluate, _mock_branch, ca
     output = capsys.readouterr().out
     security_lines = [line for line in output.splitlines() if 'security statement' in line]
     assert any('❌' in line for line in security_lines)
+
+
+@mock.patch('charmhub_listing_review.self_review.get_default_branch', return_value='main')
+@mock.patch('charmhub_listing_review.self_review.evaluate')
+def test_missing_charm_dir_reports_the_path_and_keeps_the_other_checks(
+    mock_evaluate, _mock_branch, capsys
+):
+    """A wrong --charm-dir names the path, and the checks that ran are still marked."""
+    mock_evaluate.side_effect = CharmDirNotFoundError(
+        'charms/typo',
+        checks=[
+            CheckResult(
+                name='security_doc',
+                passed=True,
+                description='* [ ] The charm provides a security statement.',
+                checklist_id='doc-security-statement',
+            ),
+        ],
+    )
+    self_review.print_self_review_results(
+        'my-charm', project_repo='https://github.com/org/my-charm', charm_dir='charms/typo'
+    )
+    output = capsys.readouterr().out
+    assert '`charms/typo` was not found' in output
+    assert 'Could not run automated checks' not in output
+    security_lines = [line for line in output.splitlines() if 'security statement' in line]
+    assert any('✅' in line for line in security_lines)
+
+
+@mock.patch('charmhub_listing_review.self_review.get_default_branch', return_value='main')
+@mock.patch('charmhub_listing_review.self_review.evaluate')
+def test_missing_charm_dir_in_local_repo_leaves_document_checks_unmarked(
+    mock_evaluate, _mock_branch, capsys
+):
+    """Local document URLs include the charm directory, so they can't count as failures."""
+    mock_evaluate.side_effect = CharmDirNotFoundError(
+        'charms/typo',
+        checks=[
+            CheckResult(
+                name='security_doc',
+                passed=False,
+                description='* [ ] The charm provides a security statement.',
+                checklist_id='doc-security-statement',
+            ),
+        ],
+    )
+    self_review.print_self_review_results(
+        'my-charm', project_repo='file:///tmp/my-charm', charm_dir='charms/typo'
+    )
+    output = capsys.readouterr().out
+    security_lines = [line for line in output.splitlines() if 'security statement' in line]
+    assert security_lines
+    assert all('❌' not in line for line in security_lines)
