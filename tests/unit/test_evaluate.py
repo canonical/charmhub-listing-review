@@ -77,7 +77,8 @@ class TestEvaluateCharmDir:
         assert python_result
         assert python_result[0].passed is True
 
-    def test_evaluate_rejects_absolute_charm_dir(self):
+    @mock.patch('charmhub_listing_review.evaluate._clone_repo')
+    def test_evaluate_rejects_absolute_charm_dir(self, mock_clone):
         with pytest.raises(ValueError, match='relative path'):
             evaluate.evaluate(
                 charm_name='my-charm',
@@ -88,9 +89,11 @@ class TestEvaluateCharmDir:
                 security_url='',
                 charm_dir='/etc',
             )
+        mock_clone.assert_not_called()
 
-    def test_evaluate_rejects_traversal_charm_dir(self):
-        with pytest.raises(ValueError, match="'\\.\\.'"):
+    @mock.patch('charmhub_listing_review.evaluate._clone_repo')
+    def test_evaluate_rejects_traversal_charm_dir(self, mock_clone):
+        with pytest.raises(ValueError, match="'\\.\\.'") as exc_info:
             evaluate.evaluate(
                 charm_name='my-charm',
                 repository_url='https://github.com/org/repo',
@@ -100,6 +103,8 @@ class TestEvaluateCharmDir:
                 security_url='',
                 charm_dir='../../etc',
             )
+        assert not isinstance(exc_info.value, evaluate.CharmDirNotFoundError)
+        mock_clone.assert_not_called()
 
     @mock.patch('charmhub_listing_review.evaluate._clone_repo')
     def test_evaluate_rejects_nonexistent_charm_dir(self, mock_clone, tmp_path):
@@ -127,9 +132,8 @@ class TestEvaluateCharmDir:
             'repository_name',
         ]
 
-    def test_evaluate_absolute_charm_dir_is_not_a_missing_dir(self):
-        # No _clone_repo mock on purpose: the path is rejected before any clone,
-        # so a clone attempt here would itself be a failure.
+    @mock.patch('charmhub_listing_review.evaluate._clone_repo')
+    def test_evaluate_absolute_charm_dir_is_not_a_missing_dir(self, mock_clone):
         with pytest.raises(ValueError) as exc_info:
             evaluate.evaluate(
                 charm_name='my-charm',
@@ -141,6 +145,8 @@ class TestEvaluateCharmDir:
                 charm_dir='/etc',
             )
         assert not isinstance(exc_info.value, evaluate.CharmDirNotFoundError)
+        # The path is rejected before any clone.
+        mock_clone.assert_not_called()
 
 
 class TestCloneRepo:
