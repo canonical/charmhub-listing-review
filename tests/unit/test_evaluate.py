@@ -729,3 +729,27 @@ def test_charmcraft_tooling_runs_the_commands_in_the_charm(tmp_path):
     assert check_output.call_args_list
     for call in check_output.call_args_list:
         assert call.kwargs['cwd'] == tmp_path
+
+
+def test_charm_lib_docs_without_library_files(tmp_path):
+    """An empty `lib/charms/<name>/` isn't a Charmhub library.
+
+    `Path.glob()` returns a generator, which is always truthy, so testing it
+    directly never detected the missing library files.
+    """
+    (tmp_path / 'charmcraft.yaml').write_text('name: my-charm\n')
+    (tmp_path / 'lib' / 'charms' / 'my-charm' / 'v0').mkdir(parents=True)
+    result = evaluate.charm_lib_docs(tmp_path)
+    assert result.passed is None
+    assert result.description == ''
+
+
+def test_charm_lib_docs_with_library(tmp_path):
+    (tmp_path / 'charmcraft.yaml').write_text('name: my-charm\n')
+    lib_dir = tmp_path / 'lib' / 'charms' / 'my-charm' / 'v0'
+    lib_dir.mkdir(parents=True)
+    (lib_dir / 'my_lib.py').write_text('"""A library."""\n')
+    result = evaluate.charm_lib_docs(tmp_path)
+    assert result.passed is None
+    assert 'the purpose of the library' in result.description
+    assert result.context == {'charm_name': 'my-charm'}
