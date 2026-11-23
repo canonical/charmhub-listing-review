@@ -83,6 +83,20 @@ def _raw_content_url(url: str) -> str:
     return f'https://raw.githubusercontent.com/{match["repo"]}/{match["path"]}'
 
 
+class CharmDirNotFoundError(ValueError):
+    """The charm directory isn't a directory in the cloned repository.
+
+    This is usually a typo in the listing request's Charm Directory field, so
+    callers may want to report it rather than fail outright. ``checks`` holds
+    the results of the checks that don't need the charm directory.
+    """
+
+    def __init__(self, charm_dir: str, checks: list[CheckResult]):
+        super().__init__(f'charm_dir does not exist or is not a directory: {charm_dir!r}')
+        self.charm_dir = charm_dir
+        self.checks = checks
+
+
 def evaluate(
     charm_name: str,
     repository_url: str,
@@ -110,20 +124,22 @@ def evaluate(
         )
     repo_dir = _clone_repo(repository_url, branch)
     try:
-        charm_path = (repo_dir / charm_dir).resolve()
-        if not charm_path.is_dir():
-            raise ValueError(f'charm_dir does not exist or is not a directory: {charm_dir!r}')
-        if not str(charm_path).startswith(str(repo_dir.resolve())):
-            raise ValueError(f'charm_dir resolves outside the repository: {charm_dir!r}')
+        # These checks don't need the charm directory, so they can still be
+        # reported when it doesn't exist.
         results.append(coding_conventions(linting_url))
         results.append(contribution_guidelines(contribution_url))
         results.append(license_statement(license_url))
         results.append(security_doc(security_url))
-        results.append(metadata_links(charm_path))
         results.append(check_charm_name(charm_name))
+        results.append(repository_name(repository_url, charm_name))
+        charm_path = (repo_dir / charm_dir).resolve()
+        if not charm_path.is_dir():
+            raise CharmDirNotFoundError(charm_dir, checks=results)
+        if not str(charm_path).startswith(str(repo_dir.resolve())):
+            raise ValueError(f'charm_dir resolves outside the repository: {charm_dir!r}')
+        results.append(metadata_links(charm_path))
         results.append(action_names(charm_path))
         results.append(option_names(charm_path))
-        results.append(repository_name(repository_url, charm_name))
         results.append(relations_includes_optional(charm_path))
         results.append(charmcraft_tooling(charm_path))
         results.append(python_requires_version(charm_path))

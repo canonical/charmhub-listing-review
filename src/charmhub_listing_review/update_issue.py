@@ -39,7 +39,7 @@ from typing import TypedDict, cast
 
 import yaml
 
-from .evaluate import evaluate, get_default_branch
+from .evaluate import CharmDirNotFoundError, evaluate, get_default_branch
 from .sphinx_refs import convert_sphinx_refs
 
 BEST_PRACTICE_SOURCE = 'https://raw.githubusercontent.com/canonical/operator/refs/heads/main/docs/reuse/best-practices.txt'
@@ -158,6 +158,39 @@ class _IssueData(TypedDict):
     security_link: str
 
 
+# Stop at whitespace and at the angle brackets of an autolink like <https://...>.
+_URL_RE = re.compile(r'https?://[^\s<>]+', re.IGNORECASE)
+# Punctuation that ends a sentence or a Markdown link rather than the URL.
+_URL_TRAILING = '.,;:!?)]'
+
+# Fields where the template asks for a single URL. Authors sometimes add a
+# label or other prose around it, so we pull the URL out rather than assume
+# the whole line is one.
+_URL_FIELDS = frozenset({
+    'demo_url',
+    'project_repo',
+    'ci_linting',
+    'ci_release_url',
+    'ci_integration_url',
+    'documentation_link',
+})
+
+
+def _extract_url(value: str) -> str:
+    """Return the first URL in ``value``, or ``value`` itself if there isn't one."""
+    match = _URL_RE.search(value)
+    if not match:
+        return value
+    url = match.group(0)
+    while url and url[-1] in _URL_TRAILING:
+        # Keep a closing parenthesis that pairs with one in the URL, as in
+        # https://en.wikipedia.org/wiki/Juju_(software).
+        if url[-1] == ')' and url.count('(') >= url.count(')'):
+            break
+        url = url[:-1]
+    return url
+
+
 def get_details_from_issue(issue_number: int, repo: str | None = None):
     """Fetch details from the issue number using the GitHub CLI.
 
@@ -194,6 +227,8 @@ def get_details_from_issue(issue_number: int, repo: str | None = None):
         match = re.search(pattern, body)
         if match:
             value = match.group(1).strip()
+            if key in _URL_FIELDS:
+                value = _extract_url(value)
             issue_data[key] = value
         else:
             issue_data[key] = None
@@ -349,24 +384,44 @@ def apply_automated_checks(issue_data: _IssueData, comment: str):
     flip ``* [ ]`` to ``* [x]`` for any check that passed. Lines without a
     matching automated check (or whose check did not pass) are left untouched
     for the reviewer to handle manually.
+
+    If the Charm Directory field doesn't name a directory in the repository,
+    only the checks that don't need it are ticked, and the comment says so,
+    rather than leaving the reviewer with an unexplained, mostly unticked
+    checklist.
     """
-    evaluation = evaluate(
-        issue_data['name'],
-        issue_data['project_repo'],
-        issue_data['ci_linting'],
-        issue_data['contribution_link'],
-        issue_data['license_link'],
-        issue_data['security_link'],
-        issue_data['default_branch'],
-        charm_dir=issue_data.get('charm_dir', '.'),
-    )
-    passed_ids = {r.checklist_id for r in evaluation.checks if r.checklist_id and r.passed is True}
+    try:
+        evaluation = evaluate(
+            issue_data['name'],
+            issue_data['project_repo'],
+            issue_data['ci_linting'],
+            issue_data['contribution_link'],
+            issue_data['license_link'],
+            issue_data['security_link'],
+            issue_data['default_branch'],
+            charm_dir=issue_data.get('charm_dir', '.'),
+        )
+    except CharmDirNotFoundError as e:
+        note = (
+            f'**Note:** the Charm Directory `{e.charm_dir}` was not found in the'
+            f' repository on branch `{issue_data["default_branch"]}`, so the automated'
+            ' checks that need it did not run, and their items below have not been'
+            ' ticked. Please check the Charm Directory field in the request, and the'
+            ' branch, in case the directory is on another one.'
+        )
+        checks = e.checks
+    else:
+        note = None
+        checks = evaluation.checks
+    passed_ids = {r.checklist_id for r in checks if r.checklist_id and r.passed is True}
     new_lines: list[str] = []
     for line in comment.splitlines():
         match = _ID_MARKER_RE.search(line)
         if match and match.group(1) in passed_ids:
             line = line.replace('* [ ]', '* [x]', 1)
         new_lines.append(line)
+    if note is not None:
+        new_lines[:0] = [note, '']
     return '\n'.join(new_lines)
 
 
