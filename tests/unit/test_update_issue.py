@@ -519,7 +519,9 @@ _CHECKS_AWAITING_CHARMCRAFT_NAME = {
     'relations_includes_optional',
 }
 
-# Checks that never have a checklist item: they hand their items to the reviewer.
+# Checks that never have a checklist item. `charm_lib_docs` builds the
+# library documentation items in its description, but nothing currently
+# shows that description to the reviewer (see #209).
 _CHECKS_WITHOUT_ITEM_BY_DESIGN = {
     'charm_lib_docs',
 }
@@ -532,8 +534,8 @@ def test_every_check_has_a_checklist_item(mock_urlopen, tmp_path):
     A check whose ID has no matching `<!-- id: ... -->` line never ticks
     anything. Best-practice IDs come from the best practices fetched from
     canonical/operator, so only the IDs this repository owns are checked
-    against the comment here; the passing self-review spread tasks cover the
-    best-practice ones against the live file.
+    against the comment here. The Spread tests fetch the best practices file
+    and assert that every best-practice check ticks.
     """
     mock_urlopen.side_effect = urllib.error.URLError('no network')
     with (

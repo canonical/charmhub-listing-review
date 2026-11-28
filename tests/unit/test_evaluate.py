@@ -699,11 +699,7 @@ def test_charmcraft_tooling_runs_the_commands_in_the_charm(tmp_path):
 
 
 def test_charm_lib_docs_without_library_files(tmp_path):
-    """An empty `lib/charms/<name>/` isn't a Charmhub library.
-
-    `Path.glob()` returns a generator, which is always truthy, so testing it
-    directly never detected the missing library files.
-    """
+    """A `lib/charms/<name>/` with no library modules isn't a Charmhub library."""
     (tmp_path / 'charmcraft.yaml').write_text('name: my-charm\n')
     (tmp_path / 'lib' / 'charms' / 'my-charm' / 'v0').mkdir(parents=True)
     result = evaluate.charm_lib_docs(tmp_path)
