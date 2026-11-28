@@ -218,7 +218,7 @@ def get_details_from_issue(issue_number: int, repo: str | None = None):
         'ci_release_url': ('### CI Release',),
         'ci_integration_url': ('### CI Integration Tests',),
         'documentation_link': ('### Documentation Link',),
-        # Requests filed before the field was relabelled use the old heading.
+        # The field was renamed from "Default Branch" in #201; keep it for older requests.
         'review_branch': ('### Review Branch', '### Default Branch'),
     }
 
